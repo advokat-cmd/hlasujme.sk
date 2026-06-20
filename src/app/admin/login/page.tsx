@@ -128,27 +128,7 @@ export default function AdminLoginPage() {
             </Btn>
           </form>
         </Card>
-        
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 9,
-            padding: "12px 14px",
-            borderRadius: 10,
-            marginTop: 14,
-            background: "var(--accent-bg)",
-            color: "var(--accent-ink)",
-            fontSize: 12,
-            lineHeight: 1.5,
-          }}
-        >
-          <Ic name="eye" size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div>
-            Ukážkové údaje: <strong>milan@ficek.sk</strong> · heslo <strong>admin123</strong>. Prihlásiť sa
-            môžu len vlastníci s rolou administrátor — bežní vlastníci hlasujú cez odkaz v e-maile.
-          </div>
-        </div>
+
       </div>
     </div>
   );
