@@ -188,7 +188,7 @@ export async function GET(
 
       doc.text("------------------------------------------------------------------------------------------------------", { align: "center" });
       doc.moveDown(0.5);
-      doc.text("Tento dokument slúži ako elektronické potvrdenie o úspešnom odoslaní a zaevidovaní Vášho hlasu v systéme hlasovanie.sk.", { align: "center" });
+      doc.text("Tento dokument slúži ako elektronické potvrdenie o úspešnom odoslaní a zaevidovaní Vášho hlasu v systéme hlasujme.sk.", { align: "center" });
       doc.text(`Kryptografický overovací kód: ${verificationHash}`, { align: "center" });
       doc.end();
     });

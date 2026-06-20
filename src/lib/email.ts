@@ -9,7 +9,7 @@ interface SendEmailParams {
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
   const provider = process.env.EMAIL_PROVIDER || "resend";
   const apiKey = process.env.EMAIL_API_KEY;
-  const from = process.env.EMAIL_FROM || "info@hlasovanie.sk";
+  const from = process.env.EMAIL_FROM || "info@hlasujme.sk";
 
   console.log(`[Email Service] Sending email to ${to}... Subject: "${subject}"`);
 
