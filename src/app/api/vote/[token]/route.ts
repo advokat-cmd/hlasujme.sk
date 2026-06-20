@@ -1,0 +1,135 @@
+import { NextResponse } from "next/server";
+import { validateVoteToken } from "@/lib/tokens";
+import { db } from "@/lib/db";
+import { VoteAnswer } from "@prisma/client";
+import { createAuditLogEntry } from "@/lib/hashChain";
+import { checkRateLimit } from "@/lib/rateLimit";
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ token: string }> }
+) {
+  try {
+    const sourceIp = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
+
+    // Limit vote submissions to 20 per minute per IP
+    if (!checkRateLimit(sourceIp, 20, 60000)) {
+      return NextResponse.json(
+        { error: "Príliš veľa pokusov o hlasovanie. Skúste to znova o minútu." },
+        { status: 429 }
+      );
+    }
+
+    const { token } = await params;
+    const body = await request.json();
+    const { answers } = body as { answers: Record<string, VoteAnswer> };
+
+    if (!answers || typeof answers !== "object") {
+      return NextResponse.json({ error: "Chybné údaje odpovedí." }, { status: 400 });
+    }
+
+    // 1. Validate magic link token
+    const tokenInfo = await validateVoteToken(token);
+    if (!tokenInfo) {
+      return NextResponse.json({ error: "Neplatný alebo expirovaný odkaz na hlasovanie." }, { status: 401 });
+    }
+
+    const { tokenRecord, poll, unit, owner } = tokenInfo;
+
+    // Check that all questions in the poll are answered
+    const unanswered = poll.questions.filter(q => !answers[String(q.no)]);
+    if (unanswered.length > 0) {
+      return NextResponse.json({
+        error: `Nezodpovedané otázky: ${unanswered.map(q => q.no).join(", ")}`
+      }, { status: 400 });
+    }
+
+
+    // 2. Perform votes insertion inside a database transaction to ensure versioning integrity
+    await db.$transaction(async (tx) => {
+      for (const q of poll.questions) {
+        const answer = answers[String(q.no)];
+
+        if (owner) {
+          // Co-owner sub-vote
+          const latestSubvote = await tx.coownerSubvote.findFirst({
+            where: {
+              pollId: poll.id,
+              unitId: unit.id,
+              ownerId: owner.id,
+              questionNo: q.no
+            },
+            orderBy: { version: "desc" }
+          });
+
+          const nextVersion = latestSubvote ? latestSubvote.version + 1 : 1;
+
+          await tx.coownerSubvote.create({
+            data: {
+              pollId: poll.id,
+              unitId: unit.id,
+              ownerId: owner.id,
+              questionNo: q.no,
+              answer,
+              version: nextVersion,
+              sourceIp,
+              tokenId: tokenRecord.id
+            }
+          });
+        } else {
+          // Unit vote
+          const latestVote = await tx.vote.findFirst({
+            where: {
+              pollId: poll.id,
+              unitId: unit.id,
+              questionNo: q.no
+            },
+            orderBy: { version: "desc" }
+          });
+
+          const nextVersion = latestVote ? latestVote.version + 1 : 1;
+
+          await tx.vote.create({
+            data: {
+              pollId: poll.id,
+              unitId: unit.id,
+              questionNo: q.no,
+              answer,
+              version: nextVersion,
+              sourceIp,
+              tokenId: tokenRecord.id
+            }
+          });
+        }
+      }
+
+      // Mark token as used (optional since it can be used again to change votes,
+      // but let's record usedAt update to log the latest activity time)
+      await tx.voteToken.update({
+        where: { id: tokenRecord.id },
+        data: { usedAt: new Date() }
+      });
+    });
+
+    // 3. Log to audit chain (outside the transaction, so if transaction commits, log is registered)
+    const actorName = owner ? `${unit.no}/${owner.name}` : `${unit.no}/${unit.actingPerson || unit.owners[0]?.name || "Vlastník"}`;
+    await createAuditLogEntry(
+      "VOTE_CAST",
+      `voter:${actorName}`,
+      {
+        message: `Hlasovanie odoslané vlastníkom pre byt č. ${unit.no}`,
+        unitNo: unit.no,
+        ownerName: owner?.name || null,
+        coMode: unit.coMode,
+        questions: Object.keys(answers).map(Number),
+        answers,
+        sourceIp
+      }
+    );
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error("Cast vote API error:", err);
+    return NextResponse.json({ error: "Interná chyba servera pri zaznamenávaní hlasu." }, { status: 500 });
+  }
+}

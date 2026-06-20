@@ -1,0 +1,229 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Building {
+  id           String   @id @default(uuid())
+  name         String
+  short        String?
+  address      String
+  entrance     String
+  unitsCount   Int      @default(0)
+  manager      String
+  contact      String
+  contactEmail String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  units        Unit[]
+  polls        Poll[]
+}
+
+enum UnitType {
+  byt
+  nebyt
+}
+
+enum CoMode {
+  single
+  rep
+  internal
+  majority
+  bsm
+  legal
+}
+
+model Unit {
+  id           String   @id @default(uuid())
+  no           String
+  type         UnitType
+  floor        String
+  votes        Int      @default(1)
+  coMode       CoMode
+  email        String?  // Main contact email for voting links
+  actingPerson String?
+  label        String?
+  status       String   @default("active") // "active" | "inactive"
+
+  buildingId   String
+  building     Building @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  owners       Owner[]
+  voteTokens   VoteToken[]
+  castVotes    Vote[]
+  castSubvotes CoownerSubvote[]
+  admins       Admin[]
+
+  @@unique([buildingId, no])
+}
+
+enum OwnerRole {
+  owner
+  coowner
+  bsm
+  proxy
+  legal
+}
+
+model Owner {
+  id         String    @id @default(uuid())
+  first      String
+  last       String
+  name       String
+  email      String?
+  share      Float     @default(1.0)
+  role       OwnerRole @default(owner)
+  
+  unitId     String
+  unit       Unit      @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  subvotes   CoownerSubvote[]
+  admins     Admin[]
+}
+
+model Admin {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String   // Argon2id hash
+  name         String
+  totpSecret   String?
+  createdAt    DateTime @default(now())
+
+  // Admin can be linked to an owner or unit
+  unitId       String?
+  unit         Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  ownerId      String?
+  owner        Owner?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+}
+
+enum PollStatus {
+  draft
+  active
+  closed
+}
+
+model Poll {
+  id           String       @id @default(uuid())
+  title        String
+  reason       String
+  declarer     String
+  announcedAt  DateTime
+  startAt      DateTime
+  endAt        DateTime
+  status       PollStatus   @default(draft)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  buildingId   String
+  building     Building     @relation(fields: [buildingId], references: [id], onDelete: Cascade)
+
+  questions    Question[]
+  voteTokens   VoteToken[]
+  votes        Vote[]
+  subvotes     CoownerSubvote[]
+  sealedResult SealedResult?
+}
+
+enum MajorityType {
+  half_all       @map("half-all")
+  twothirds_all  @map("twothirds-all")
+  all
+  half_present   @map("half-present")
+}
+
+model Question {
+  id           String       @id @default(uuid())
+  pollId       String
+  poll         Poll         @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  no           Int
+  kind         String
+  title        String
+  text         String
+  majorityType MajorityType
+  note         String?
+  attachments  String[]     @default([])
+
+  @@unique([pollId, no])
+}
+
+model VoteToken {
+  id         String   @id @default(uuid())
+  pollId     String
+  poll       Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  
+  // For internal voting where co-owners get individual tokens
+  ownerId    String?
+  
+  tokenHash  String   @unique // CSPRNG token hash (SHA-256)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+}
+
+enum VoteAnswer {
+  agree
+  disagree
+  abstain
+}
+
+model Vote {
+  id         String     @id @default(uuid())
+  pollId     String
+  poll       Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  questionNo Int
+  answer     VoteAnswer
+  version    Int        @default(1)
+  createdAt  DateTime   @default(now())
+  sourceIp   String?
+  tokenId    String?
+
+  @@unique([pollId, unitId, questionNo, version])
+}
+
+model CoownerSubvote {
+  id         String     @id @default(uuid())
+  pollId     String
+  poll       Poll       @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  ownerId    String
+  owner      Owner      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  questionNo Int
+  answer     VoteAnswer
+  version    Int        @default(1)
+  createdAt  DateTime   @default(now())
+  sourceIp   String?
+  tokenId    String?
+
+  @@unique([pollId, unitId, ownerId, questionNo, version])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  action    String
+  actor     String
+  payload   String   // JSON string
+  prevHash  String
+  entryHash String   @unique
+  createdAt DateTime @default(now())
+}
+
+model SealedResult {
+  id         String   @id @default(uuid())
+  pollId     String   @unique
+  poll       Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  
+  resultJson String   // Serialized result details (tallies, votes etc.)
+  sha256     String   // Hash of results data
+  sealedAt   DateTime @default(now())
+  pdfPath    String   // Path to PDF file on server
+}

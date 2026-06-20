@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Elektronické hlasovanie vlastníkov</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Spectral:wght@500;600;700&family=Newsreader:wght@500;600&family=Lora:wght@500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --serif: 'Spectral', Georgia, 'Times New Roman', serif;
+    --sans: 'Public Sans', system-ui, -apple-system, sans-serif;
+
+    --paper: #F4F1EA;
+    --paper-2: #ECE7DC;
+    --surface: #FFFFFF;
+    --ink: #1B2330;
+    --ink-soft: #5C6473;
+    --ink-faint: #606673; /* WCAG AA: ≥4.5:1 aj na najtmavšom bežnom podklade --paper-2 */
+    --line: #E5DFD3;
+    --sidebar: #16273F;
+
+    --primary: #1F3A5F;
+    --primary-bg: color-mix(in srgb, var(--primary) 9%, white);
+
+    --accent: #B07D2B;
+    --accent-bg: color-mix(in srgb, var(--accent) 15%, white);
+    --accent-ink: color-mix(in srgb, var(--accent), #2a1c00 38%);
+
+    --agree: #2E7D5B;
+    --agree-bg: color-mix(in srgb, var(--agree) 13%, white);
+    --disagree: #B23A48;
+    --disagree-bg: color-mix(in srgb, var(--disagree) 12%, white);
+    --abstain: #6B6254; /* WCAG AA: tmavšia šedohnedá pre text „Nechcem hlasovať" */
+    --abstain-bg: color-mix(in srgb, var(--abstain) 16%, white);
+
+    --v-paper: var(--paper);
+    --v-head: var(--primary);
+    --v-card: #FFFFFF;
+    --v-line: var(--line);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: var(--sans);
+    background: var(--paper-2);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  #root { height: 100%; }
+  button { font-family: var(--sans); }
+  /* WCAG 2.2 — 2.4.11 Focus Appearance: viditeľný fokus na všetkých interaktívnych prvkoch */
+  :focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+  /* Vizuálne skrytý, no čítačkám dostupný text */
+  .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+  ::selection { background: color-mix(in srgb, var(--accent) 28%, white); }
+  /* scrollbars */
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ink-faint) 55%, transparent); border-radius: 9px; border: 3px solid transparent; background-clip: padding-box; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+<template id="__bundler_thumbnail">
+  <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <rect width="100" height="100" fill="#1F3A5F"/>
+    <g transform="translate(50 50)" stroke="#B07D2B" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M0 -22 V 22"/>
+      <path d="M-15 -15 L -26 8 H -4 Z" /><path d="M15 -15 L 26 8 H 4 Z"/>
+      <path d="M-20 22 H 20"/><path d="M-15 -15 L 0 -20 L 15 -15"/>
+    </g>
+  </svg>
+</template>
+
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<script type="text/babel" src="data.jsx"></script>
+<script type="text/babel" src="ui.jsx"></script>
+<script type="text/babel" src="engine.jsx"></script>
+<script type="text/babel" src="admin-poll.jsx"></script>
+<script type="text/babel" src="admin-create.jsx"></script>
+<script type="text/babel" src="admin.jsx"></script>
+<script type="text/babel" src="voter.jsx"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "primaryColor": "#1F3A5F",
+  "accentColor": "#B07D2B",
+  "serifFont": "Newsreader",
+  "paperTone": "warm"
+}/*EDITMODE-END*/;
+
+const PAPER_TONES = {
+  warm:  { paper:'#F4F1EA', paper2:'#ECE7DC', line:'#E5DFD3' },
+  light: { paper:'#F7F7F5', paper2:'#EEEEEC', line:'#E5E5E2' },
+  cool:  { paper:'#EFF2F6', paper2:'#E4E9F0', line:'#DCE2EA' },
+};
+const SERIFS = {
+  Spectral:  "'Spectral', Georgia, serif",
+  Newsreader:"'Newsreader', Georgia, serif",
+  Lora:      "'Lora', Georgia, serif",
+};
+
+// Scale a fixed-size child to fit available box (for the phone)
+function FitBox({ w, h, children }) {
+  const ref = useRef(null);
+  const [scale, setScale] = useState(1);
+  useEffect(() => {
+    const fit = () => {
+      const el = ref.current; if (!el) return;
+      const pad = 32;
+      const s = Math.min(1, (el.clientWidth - pad) / w, (el.clientHeight - pad) / h);
+      setScale(s > 0 ? s : 1);
+    };
+    fit();
+    const ro = new ResizeObserver(fit); if (ref.current) ro.observe(ref.current);
+    window.addEventListener('resize', fit);
+    return () => { ro.disconnect(); window.removeEventListener('resize', fit); };
+  }, [w, h]);
+  return (
+    <div ref={ref} style={{ flex:1, minHeight:0, display:'flex', alignItems:'center', justifyContent:'center', overflow:'hidden' }}>
+      <div style={{ width:w, height:h, transform:`scale(${scale})`, transformOrigin:'center', flexShrink:0 }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [mode, setMode] = useState('admin'); // 'admin' | 'voter'
+  const [currentUser, setCurrentUser] = useState(null); // logged-in administrator
+  const [version, setVersion] = useState(0); // bump to propagate data edits
+  const refresh = React.useCallback(() => setVersion(v => v + 1), []);
+
+  const tone = PAPER_TONES[t.paperTone] || PAPER_TONES.warm;
+  const rootVars = {
+    '--primary': t.primaryColor,
+    '--accent': t.accentColor,
+    '--serif': SERIFS[t.serifFont] || SERIFS.Spectral,
+    '--paper': tone.paper,
+    '--paper-2': tone.paper2,
+    '--line': tone.line,
+  };
+
+  return (
+   <StoreContext.Provider value={{ version, refresh }}>
+    <div style={{ ...rootVars, height:'100%', display:'flex', flexDirection:'column', background:'var(--paper-2)' }}>
+      {/* Top bar */}
+      <header style={{ height:56, flexShrink:0, display:'flex', alignItems:'center', gap:16, padding:'0 20px',
+        background:'var(--surface)', borderBottom:'1px solid var(--line)', zIndex:10 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <div style={{ width:30, height:30, borderRadius:7, background:'var(--primary)', display:'flex',
+            alignItems:'center', justifyContent:'center' }}>
+            <Ic name="scale" size={17} style={{ color:'#fff' }} sw={2} />
+          </div>
+          <div style={{ fontFamily:'var(--serif)', fontSize:15.5, fontWeight:600, letterSpacing:-0.1 }}>
+            Elektronické hlasovanie vlastníkov</div>
+        </div>
+
+        {/* mode switch */}
+        <div style={{ marginLeft:'auto', display:'flex', background:'var(--paper-2)', borderRadius:10, padding:3, gap:2 }}>
+          {[['admin','Admin','dashboard'],['voter','Vlastník · mobil','vote']].map(([id,label,icon])=>(
+            <button key={id} onClick={()=>setMode(id)} style={{ display:'flex', alignItems:'center', gap:7,
+              padding:'7px 14px', borderRadius:8, border:'none', cursor:'pointer', fontFamily:'inherit', fontSize:13,
+              fontWeight:600, background: mode===id?'var(--surface)':'transparent', color: mode===id?'var(--ink)':'var(--ink-soft)',
+              boxShadow: mode===id?'0 1px 3px rgba(0,0,0,.1)':'none' }}>
+              <Ic name={icon} size={15} />{label}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {/* Body */}
+      <div style={{ flex:1, minHeight:0 }}>
+        {mode==='admin'
+          ? (currentUser
+              ? <AdminApp onOpenVoter={()=>setMode('voter')} user={currentUser} onLogout={()=>setCurrentUser(null)} />
+              : <LoginScreen onLogin={(u)=>setCurrentUser(u)} />)
+          : <div style={{ height:'100%', display:'flex', flexDirection:'column', alignItems:'center',
+              background:'radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 8%, var(--paper-2)), var(--paper-2))' }}>
+              <div style={{ padding:'18px 16px 0', textAlign:'center', flexShrink:0 }}>
+                <div style={{ fontSize:13, color:'var(--ink-soft)', display:'inline-flex', alignItems:'center', gap:8 }}>
+                  <Ic name="link" size={15} style={{ color:'var(--primary)' }} />
+                  Takto vidí hlasovanie vlastník po kliknutí na osobný link v e-maile
+                </div>
+              </div>
+              <FitBox w={402} h={874}><VoterApp /></FitBox>
+            </div>}
+      </div>
+
+      {/* Tweaks */}
+      <TweaksPanel title="Tweaks">
+        <TweakSection label="Identita" />
+        <TweakColor label="Primárna farba" value={t.primaryColor}
+          options={['#1F3A5F','#243B53','#1E4A4A','#3A2F55','#5A2A33']}
+          onChange={v=>setTweak('primaryColor', v)} />
+        <TweakColor label="Doplnková farba" value={t.accentColor}
+          options={['#B07D2B','#2E7D5B','#9C3B2E','#39607E','#7A5C9E']}
+          onChange={v=>setTweak('accentColor', v)} />
+        <TweakSection label="Typografia a podklad" />
+        <TweakRadio label="Pätkové písmo" value={t.serifFont}
+          options={['Spectral','Newsreader','Lora']}
+          onChange={v=>setTweak('serifFont', v)} />
+        <TweakRadio label="Tón podkladu" value={t.paperTone}
+          options={['warm','light','cool']}
+          onChange={v=>setTweak('paperTone', v)} />
+      </TweaksPanel>
+    </div>
+   </StoreContext.Provider>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

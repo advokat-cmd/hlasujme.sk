@@ -1,0 +1,155 @@
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Ic } from "@/components/ui/Icons";
+import { Card } from "@/components/ui/Card";
+import { Btn } from "@/components/ui/Button";
+import { FormRow, Input } from "@/components/ui/FormControls";
+
+export default function AdminLoginPage() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (loading) return;
+
+    setError("");
+    setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setError(data.error || "Prihlásenie zlyhalo.");
+      } else {
+        router.push("/admin");
+        router.refresh();
+      }
+    } catch (err) {
+      setError("Vyskytla sa chyba sieťového pripojenia.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        height: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        background: "radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 9%, var(--paper-2)), var(--paper-2))",
+      }}
+    >
+      <div style={{ width: 420, maxWidth: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 22 }}>
+          <div
+            style={{
+              width: 52,
+              height: 52,
+              borderRadius: 13,
+              background: "var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: 14,
+            }}
+          >
+            <Ic name="scale" size={28} sw={2} style={{ color: "#fff" }} />
+          </div>
+          <h1 style={{ fontFamily: "var(--serif)", fontSize: 23, fontWeight: 600, margin: 0 }}>
+            Prihlásenie administrátora
+          </h1>
+          <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "6px 0 0", textAlign: "center" }}>
+            Bytový dom Björnsonova 3
+          </p>
+        </div>
+        
+        <Card>
+          <form onSubmit={submit}>
+            <FormRow label="E-mail">
+              <Input
+                type="email"
+                value={email}
+                autoFocus
+                autoComplete="username"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setError("");
+                }}
+                placeholder="vas@email.sk"
+                required
+              />
+            </FormRow>
+            <FormRow label="Heslo">
+              <Input
+                type="password"
+                value={password}
+                autoComplete="current-password"
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setError("");
+                }}
+                placeholder="••••••••"
+                required
+              />
+            </FormRow>
+            
+            {error && (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 7,
+                  fontSize: "12.5px",
+                  color: "var(--disagree)",
+                  marginBottom: 12,
+                }}
+              >
+                <Ic name="alert" size={15} />
+                {error}
+              </div>
+            )}
+            
+            <Btn type="submit" kind="primary" full size="lg" icon="lock" disabled={loading}>
+              {loading ? "Prihlasovanie..." : "Prihlásiť sa"}
+            </Btn>
+          </form>
+        </Card>
+        
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 9,
+            padding: "12px 14px",
+            borderRadius: 10,
+            marginTop: 14,
+            background: "var(--accent-bg)",
+            color: "var(--accent-ink)",
+            fontSize: 12,
+            lineHeight: 1.5,
+          }}
+        >
+          <Ic name="eye" size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div>
+            Ukážkové údaje: <strong>milan@ficek.sk</strong> · heslo <strong>admin123</strong>. Prihlásiť sa
+            môžu len vlastníci s rolou administrátor — bežní vlastníci hlasujú cez odkaz v e-maile.
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
