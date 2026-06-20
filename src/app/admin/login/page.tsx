@@ -32,8 +32,7 @@ export default function AdminLoginPage() {
       if (!res.ok) {
         setError(data.error || "Prihlásenie zlyhalo.");
       } else {
-        router.push("/admin");
-        router.refresh();
+        window.location.href = "/admin";
       }
     } catch (err) {
       setError("Vyskytla sa chyba sieťového pripojenia.");
