@@ -21,6 +21,20 @@ function tomorrowAt(h: number, m = 0, addDays = 0) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
+function nowFormatted() {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function fourteenDaysFromNow() {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  d.setHours(20, 0, 0, 0);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 function fmtDT(v: string) {
   if (!v) return "—";
   const d = new Date(v);
@@ -124,8 +138,8 @@ export default function CreatePollPage() {
   const [basics, setBasics] = useState({
     title: "",
     reason: "",
-    start: tomorrowAt(8),
-    end: tomorrowAt(20, 0, 14),
+    start: nowFormatted(),
+    end: fourteenDaysFromNow(),
   });
 
   const [questions, setQuestions] = useState<Array<{ id: number; text: string; majority: string; note: string; file?: File }>>([
