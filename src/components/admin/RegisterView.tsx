@@ -239,25 +239,27 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                           <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
                             {CO_MODE_LABEL[u.coMode]}
                           </Pill>
-                          <span
-                            style={{
-                              fontSize: "12.5px",
-                              color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 5,
-                            }}
-                          >
-                            {noEmail ? (
-                              <>
-                                <Ic name="alert" size={13} /> chýba e-mail
-                              </>
-                            ) : (
-                              <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: 200 }}>
-                                {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
-                              </span>
-                            )}
-                          </span>
+                          {!open && (
+                            <span
+                              style={{
+                                fontSize: "12.5px",
+                                color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 5,
+                              }}
+                            >
+                              {noEmail ? (
+                                <>
+                                  <Ic name="alert" size={13} /> chýba e-mail
+                                </>
+                              ) : (
+                                <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: 200 }}>
+                                  {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
+                                </span>
+                              )}
+                            </span>
+                          )}
                         </div>
                       </>
                     ) : (
@@ -282,6 +284,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                             display: "flex",
                             alignItems: "center",
                             gap: 5,
+                            visibility: open ? "hidden" : "visible",
                           }}
                         >
                           {noEmail ? (
@@ -379,21 +382,13 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                                 {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
                               </div>
                               <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", display: "flex", flexWrap: "wrap", gap: "4px 8px", alignItems: "center" }}>
-                                <span>{o.email || "bez e-mailu"}</span>
+                                <span style={{ wordBreak: "break-all" }}>{o.email || "bez e-mailu"}</span>
                                 <span>·</span>
                                 <span>podiel {Math.round(o.share * 100)}%</span>
-                                {o.phone && (
-                                  <>
-                                    <span>·</span>
-                                    <span>tel: {o.phone}</span>
-                                  </>
-                                )}
-                                {o.birthDate && (
-                                  <>
-                                    <span>·</span>
-                                    <span>nar: {o.birthDate}</span>
-                                  </>
-                                )}
+                                <span>·</span>
+                                <span>tel: {o.phone || "—"}</span>
+                                <span>·</span>
+                                <span>nar: {o.birthDate || "—"}</span>
                               </div>
                             </div>
                           </div>

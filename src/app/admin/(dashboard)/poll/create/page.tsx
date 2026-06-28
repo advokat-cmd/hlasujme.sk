@@ -10,6 +10,7 @@ import { Pill } from "@/components/ui/Pill";
 import { Stat } from "@/components/ui/Stat";
 import { PageHead } from "@/components/admin/PageHead";
 import { FormRow, Input } from "@/components/ui/FormControls";
+import { useNarrow } from "@/components/ui/LayoutHelpers";
 
 // Default Slovakia date-time formatting helpers
 function tomorrowAt(h: number, m = 0, addDays = 0) {
@@ -31,6 +32,7 @@ function fmtDT(v: string) {
 const MAJORITY_OPTS = {
   "half-all": { label: "Nadpolovičná väčšina všetkých vlastníkov", frac: "> 1/2 všetkých" },
   "twothirds-all": { label: "Dvojtretinová väčšina všetkých vlastníkov", frac: "≥ 2/3 všetkých" },
+  "fourfifths-all": { label: "Štvorpätinová väčšina všetkých vlastníkov", frac: "≥ 4/5 všetkých" },
   all: { label: "Súhlas všetkých vlastníkov", frac: "všetci" },
   "half-present": { label: "Nadpolovičná väčšina zúčastnených", frac: "> 1/2 hlasujúcich" },
 };
@@ -65,6 +67,7 @@ const fieldStyle: React.CSSProperties = {
 
 export default function CreatePollPage() {
   const router = useRouter();
+  const isMobile = useNarrow(600);
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -171,9 +174,11 @@ export default function CreatePollPage() {
               >
                 {i < step ? <Ic name="check" size={15} sw={3} /> : i + 1}
               </div>
-              <span style={{ fontSize: 13, fontWeight: 600, color: i <= step ? "var(--ink)" : "var(--ink-faint)" }}>
-                {s}
-              </span>
+              {(!isMobile || i === step) && (
+                <span style={{ fontSize: 13, fontWeight: 600, color: i <= step ? "var(--ink)" : "var(--ink-faint)", whiteSpace: "nowrap" }}>
+                  {s}
+                </span>
+              )}
             </div>
             {i < steps.length - 1 && (
               <div style={{ flex: 1, height: 1.5, margin: "0 14px", background: i < step ? "var(--agree)" : "var(--line)" }} />
@@ -219,7 +224,7 @@ export default function CreatePollPage() {
               />
             </FormRow>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16 }}>
               <FormRow label="Začiatok hlasovania" hint="Predvolene zajtrajší deň — kliknutím zvolíte dátum a čas.">
                 <input
                   type="datetime-local"
@@ -371,7 +376,7 @@ export default function CreatePollPage() {
                     </FormRow>
                     
                     <FormRow label="Požadovaná väčšina">
-                      <div role="radiogroup" aria-label="Požadovaná väčšina" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                      <div role="radiogroup" aria-label="Požadovaná väčšina" style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 8 }}>
                         {Object.entries(MAJORITY_OPTS).map(([k, m]) => (
                           <button
                             key={k}
@@ -398,7 +403,7 @@ export default function CreatePollPage() {
                       </div>
                     </FormRow>
                     
-                    <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: "12.5px", color: "var(--ink-soft)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: "12.5px", color: "var(--ink-soft)", flexWrap: "wrap" }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>Možnosti odpovede:</span>
                       <Pill tone="agree" size="sm" icon="check">
                         Súhlasím
@@ -426,7 +431,7 @@ export default function CreatePollPage() {
               </div>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 18 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 12, marginBottom: 18 }}>
               <Card pad={16}>
                 <Stat label="Zahrnuté jednotky" value="36 / 36" />
               </Card>
@@ -467,7 +472,7 @@ export default function CreatePollPage() {
               </div>
             </div>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 22 }}>
+            <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: 22 }}>
               <div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>

@@ -107,6 +107,10 @@ export default async function AdminPollDetailPage({
       ? u.actingPerson 
       : (u.owners.map(o => o.name).join(", ") || "Vlastník");
 
+    const recipients = u.coMode === "internal"
+      ? u.owners.map(o => ({ name: o.name, email: o.email }))
+      : [{ name: ownerName, email: u.email }];
+
     unitVotesList.push({
       unitId: u.id,
       unitNo: u.no,
@@ -116,7 +120,8 @@ export default async function AdminPollDetailPage({
       disputed: isDisputedOnAny,
       at: latestVoteTime ? latestVoteTime.toISOString() : null,
       changed: isChanged,
-      answers: unitAnswers
+      answers: unitAnswers,
+      recipients
     });
   }
 

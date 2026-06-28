@@ -25,7 +25,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
 
   const nav = [
     { id: "dashboard", label: "Prehľad", icon: "dashboard", href: "/admin" },
-    { id: "poll", label: "Aktívne hlasovanie", icon: "vote", href: pollLink },
+    { id: "poll-active", label: "Hlasovania (aktívne)", icon: "vote", href: "/admin/poll/active" },
+    { id: "poll-archive", label: "Hlasovania (archív)", icon: "archive", href: "/admin/poll/archive" },
     { id: "register", label: "Dom a vlastníci", icon: "building", href: "/admin/register" },
   ];
 
@@ -43,7 +44,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
 
   const getActiveTab = () => {
     if (pathname === "/admin") return "dashboard";
-    if (pathname.startsWith("/admin/poll") || pathname.startsWith("/admin/poll/create")) return "poll";
+    if (pathname.startsWith("/admin/poll/archive")) return "poll-archive";
+    if (pathname.startsWith("/admin/poll")) return "poll-active";
     if (pathname.startsWith("/admin/register")) return "register";
     return "";
   };

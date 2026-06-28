@@ -169,6 +169,9 @@ export async function tallyQuestion(
     case MajorityType.twothirds_all:
       need = Math.ceil(total * 2 / 3);
       break;
+    case MajorityType.fourfifths_all:
+      need = Math.ceil(total * 4 / 5);
+      break;
     case MajorityType.all:
       need = total;
       break;

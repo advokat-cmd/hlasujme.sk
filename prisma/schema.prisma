@@ -135,6 +135,7 @@ model Poll {
 enum MajorityType {
   half_all       @map("half-all")
   twothirds_all  @map("twothirds-all")
+  fourfifths_all @map("fourfifths-all")
   all
   half_present   @map("half-present")
 }

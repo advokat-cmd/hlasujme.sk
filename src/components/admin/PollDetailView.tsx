@@ -64,6 +64,7 @@ interface PollDetailViewProps {
       disputed: boolean;
       note: string | null;
     }>;
+    recipients: Array<{ name: string; email: string | null }>;
   }>;
   emailStats: {
     eligibleEmailsCount: number;
@@ -85,6 +86,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const [tab, setTab] = useState("results");
   const [closing, setClosing] = useState(false);
   const [filter, setFilter] = useState("all");
+  const [expandedEmailCard, setExpandedEmailCard] = useState<number | null>(null);
 
   const [files, setFiles] = useState<any[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(true);
@@ -163,6 +165,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     const map: Record<string, string> = {
       "half-all": "Nadpolovičná väčšina všetkých vlastníkov",
       "twothirds-all": "Dvojtretinová väčšina všetkých vlastníkov",
+      "fourfifths-all": "Štvorpätinová väčšina všetkých vlastníkov",
       all: "Súhlas všetkých vlastníkov",
       "half-present": "Nadpolovičná väčšina zúčastnených",
     };
@@ -174,6 +177,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     const map: Record<string, string> = {
       "half-all": "> 1/2 všetkých",
       "twothirds-all": "≥ 2/3 všetkých",
+      "fourfifths-all": "≥ 4/5 všetkých",
       all: "všetci",
       "half-present": "> 1/2 hlasujúcich",
     };
@@ -693,9 +697,34 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
             ].map((m, i) => {
               const sTone: Record<string, string> = { sent: "success", scheduled: "primary", auto: "neutral", pending: "neutral" };
               const sLabel: Record<string, string> = { sent: "odoslané", scheduled: "naplánované", auto: "automatické", pending: "čaká" };
+              const isExpanded = expandedEmailCard === i;
+
+              // Helper for formatting date
+              const formatDateStr = (dateStr: string | Date) => {
+                const d = new Date(dateStr);
+                return d.toLocaleString("sk-SK", {
+                  day: "numeric",
+                  month: "numeric",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+              };
+
               return (
-                <Card key={i} pad={0}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "15px 18px" }}>
+                <Card key={i} pad={0} style={{ overflow: "hidden" }}>
+                  <div
+                    onClick={() => setExpandedEmailCard(isExpanded ? null : i)}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 14,
+                      padding: "15px 18px",
+                      cursor: "pointer",
+                      userSelect: "none",
+                      background: isExpanded ? "var(--paper-2)" : "transparent",
+                    }}
+                  >
                     <div
                       style={{
                         width: 38,
@@ -720,7 +749,153 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     <Pill tone={sTone[m.s] as any} size="sm">
                       {sLabel[m.s]}
                     </Pill>
+                    <Ic
+                      name="chevD"
+                      size={16}
+                      style={{
+                        color: "var(--ink-faint)",
+                        transform: isExpanded ? "rotate(180deg)" : "none",
+                        transition: "transform .2s",
+                        flexShrink: 0,
+                      }}
+                    />
                   </div>
+
+                  {isExpanded && (
+                    <div style={{ padding: "12px 18px 18px", borderTop: "1px solid var(--line)", background: "var(--paper-2)" }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10, paddingLeft: isMobile ? 0 : 52 }}>
+                        Zoznam príjemcov a stav doručenia
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingLeft: isMobile ? 0 : 52 }}>
+                        {i === 0 && (() => {
+                          const list = unitVotesList.flatMap(u =>
+                            u.recipients.map(r => ({
+                              name: r.name,
+                              email: r.email,
+                              unitNo: u.unitNo,
+                            }))
+                          );
+                          return list.map((item, idx) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ minWidth: 200 }}>
+                                <strong>{item.name}</strong>{" "}
+                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                              </span>
+                              {item.email ? (
+                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Odoslané {formatDateStr(poll.announcedAt)}
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Neodoslané (chyba kontaktu)
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+
+                        {i === 1 && (() => {
+                          const list = unitVotesList
+                            .filter(u => !u.voted)
+                            .flatMap(u =>
+                              u.recipients.map(r => ({
+                                name: r.name,
+                                email: r.email,
+                                unitNo: u.unitNo,
+                              }))
+                            );
+                          if (list.length === 0) {
+                            return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Všetci vlastníci už zahlasovali. Žiadne pripomienky nie sú plánované.</div>;
+                          }
+                          return list.map((item, idx) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ minWidth: 200 }}>
+                                <strong>{item.name}</strong>{" "}
+                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                              </span>
+                              {item.email ? (
+                                <span style={{ color: "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Naplánované (48 h pred koncom)
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Preskočené (chyba kontaktu)
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+
+                        {i === 2 && (() => {
+                          const list = unitVotesList
+                            .filter(u => u.voted && u.at)
+                            .flatMap(u =>
+                              u.recipients.map(r => ({
+                                name: r.name,
+                                email: r.email,
+                                unitNo: u.unitNo,
+                                votedAt: u.at!,
+                              }))
+                            );
+                          if (list.length === 0) {
+                            return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Zatiaľ neboli odovzdané žiadne hlasy.</div>;
+                          }
+                          return list.map((item, idx) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ minWidth: 200 }}>
+                                <strong>{item.name}</strong>{" "}
+                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                              </span>
+                              {item.email ? (
+                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Potvrdené {formatDateStr(item.votedAt)}
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Odoslané na email jednotky
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+
+                        {i === 3 && (() => {
+                          const list = unitVotesList.flatMap(u =>
+                            u.recipients.map(r => ({
+                              name: r.name,
+                              email: r.email,
+                              unitNo: u.unitNo,
+                            }))
+                          );
+                          if (poll.status !== "closed") {
+                            return (
+                              <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                                Výsledky budú automaticky odoslané všetkým {list.filter(item => item.email).length} príjemcom po overení a uzavretí hlasovania.
+                              </div>
+                            );
+                          }
+                          return list.map((item, idx) => (
+                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                              <span style={{ minWidth: 200 }}>
+                                <strong>{item.name}</strong>{" "}
+                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                              </span>
+                              {item.email ? (
+                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Odoslané {formatDateStr(poll.sealedResult ? poll.endAt : poll.endAt)}
+                                </span>
+                              ) : (
+                                <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  Neodoslané (chyba kontaktu)
+                                </span>
+                              )}
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
                 </Card>
               );
             })}

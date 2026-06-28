@@ -165,6 +165,8 @@ export async function generateSealedPdf(pollId: string): Promise<Buffer> {
         ? "Nadpolovičná väčšina všetkých vlastníkov" 
         : normalizedMaj === "twothirds-all" 
         ? "Dvojtretinová väčšina všetkých vlastníkov" 
+        : normalizedMaj === "fourfifths-all" 
+        ? "Štvorpätinová väčšina všetkých vlastníkov" 
         : normalizedMaj === "all" 
         ? "Súhlas všetkých vlastníkov" 
         : "Nadpolovičná väčšina zúčastnených";
