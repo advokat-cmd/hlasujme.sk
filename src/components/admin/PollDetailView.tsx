@@ -395,6 +395,37 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5 }}>
                           {q.text}
                         </p>
+                        {q.note && (
+                          <div style={{ fontSize: "11px", color: "var(--ink-soft)", background: "var(--paper-2)", border: "1px solid var(--line)", padding: "5px 9px", borderRadius: 6, marginTop: 8 }}>
+                            💡 <strong>Poznámka:</strong> {q.note}
+                          </div>
+                        )}
+                        {q.attachments && q.attachments.length > 0 && (
+                          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {q.attachments.map((url, uIdx) => (
+                              <a
+                                key={uIdx}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  fontSize: "12px",
+                                  color: "var(--primary)",
+                                  textDecoration: "none",
+                                  fontWeight: 600,
+                                  background: "var(--primary-bg)",
+                                  padding: "4px 10px",
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Ic name="doc" size={13} /> Podkladový dokument
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -432,6 +463,37 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 640 }}>
                           {q.text}
                         </p>
+                        {q.note && (
+                          <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", background: "var(--paper-2)", border: "1px solid var(--line)", padding: "6px 10px", borderRadius: 6, marginTop: 8, maxWidth: 640 }}>
+                            💡 <strong>Poznámka:</strong> {q.note}
+                          </div>
+                        )}
+                        {q.attachments && q.attachments.length > 0 && (
+                          <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {q.attachments.map((url, uIdx) => (
+                              <a
+                                key={uIdx}
+                                href={url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  fontSize: "12.5px",
+                                  color: "var(--primary)",
+                                  textDecoration: "none",
+                                  fontWeight: 600,
+                                  background: "var(--primary-bg)",
+                                  padding: "5px 12px",
+                                  borderRadius: 8,
+                                }}
+                              >
+                                <Ic name="doc" size={14} /> Podkladový dokument (Google Drive)
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       <div style={{ textAlign: "right", flexShrink: 0 }}>
                         {getStatusPill(q.tally.status)}

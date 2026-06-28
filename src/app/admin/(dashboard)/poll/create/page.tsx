@@ -91,7 +91,7 @@ export default function CreatePollPage() {
     end: tomorrowAt(20, 0, 14),
   });
 
-  const [questions, setQuestions] = useState<Array<{ id: number; text: string; majority: string; note: string }>>([
+  const [questions, setQuestions] = useState<Array<{ id: number; text: string; majority: string; note: string; file?: File }>>([
     { id: 1, text: "", majority: "half-all", note: "" },
   ]);
 
@@ -118,7 +118,11 @@ export default function CreatePollPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           basics,
-          questions,
+          questions: questions.map((q) => ({
+            text: q.text,
+            majority: q.majority,
+            note: q.note || "",
+          })),
         }),
       });
 
@@ -127,7 +131,37 @@ export default function CreatePollPage() {
         setError(data.error || "Nepodarilo sa vytvoriť hlasovanie.");
         setLoading(false);
       } else {
-        router.push(`/admin/poll/${data.pollId}`);
+        const pollId = data.pollId;
+        // Upload question-specific attachments if any
+        for (let i = 0; i < questions.length; i++) {
+          const q = questions[i];
+          if (q.file) {
+            try {
+              const formData = new FormData();
+              formData.append("file", q.file);
+
+              const uploadRes = await fetch(`/api/admin/poll/${pollId}/upload`, {
+                method: "POST",
+                body: formData,
+              });
+
+              if (uploadRes.ok) {
+                const uploadData = await uploadRes.json();
+                const webViewLink = uploadData.file.webViewLink;
+
+                await fetch(`/api/admin/poll/${pollId}/question/${i + 1}/attach`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ attachmentUrl: webViewLink }),
+                });
+              }
+            } catch (uploadErr) {
+              console.error(`Failed to upload attachment for question ${i + 1}:`, uploadErr);
+            }
+          }
+        }
+
+        router.push(`/admin/poll/${pollId}`);
         router.refresh();
       }
     } catch (err) {
@@ -447,6 +481,63 @@ export default function CreatePollPage() {
                         value={q.note || ""}
                         onChange={(e) => setQVal(q.id, { note: e.target.value })}
                       />
+                    </FormRow>
+
+                    <FormRow label="Podkladový dokument k otázke (nepovinné)" hint="Súbor bude nahraný na Google Drive a sprístupnený vlastníkom pri hlasovaní.">
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <input
+                          type="file"
+                          id={`file-upload-${q.id}`}
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            const selectedFile = e.target.files?.[0];
+                            if (selectedFile) {
+                              setQVal(q.id, { file: selectedFile });
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor={`file-upload-${q.id}`}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 8,
+                            padding: "8px 14px",
+                            borderRadius: 9,
+                            border: "1px dashed var(--line)",
+                            background: "var(--surface)",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: 600,
+                            color: "var(--primary)",
+                          }}
+                        >
+                          <Ic name="upload" size={15} />
+                          {q.file ? "Zmeniť dokument" : "Vybrať dokument"}
+                        </label>
+                        {q.file && (
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "12.5px", color: "var(--ink-soft)" }}>
+                            <Ic name="doc" size={14} style={{ color: "var(--primary)" }} />
+                            <span style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                              {q.file.name}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setQVal(q.id, { file: undefined })}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                cursor: "pointer",
+                                color: "var(--disagree)",
+                                display: "inline-flex",
+                                padding: 2,
+                              }}
+                            >
+                              <Ic name="x" size={14} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     </FormRow>
                     
                     <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: "12.5px", color: "var(--ink-soft)", flexWrap: "wrap", marginTop: 14 }}>

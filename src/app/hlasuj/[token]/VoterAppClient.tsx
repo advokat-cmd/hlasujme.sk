@@ -583,8 +583,11 @@ function VVote({
         {q.attachments && q.attachments.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
             {q.attachments.map((a, i) => (
-              <div
+              <a
                 key={i}
+                href={a}
+                target="_blank"
+                rel="noopener noreferrer"
                 style={{
                   display: "flex",
                   alignItems: "center",
@@ -594,14 +597,17 @@ function VVote({
                   background: "var(--v-card)",
                   border: "1px solid var(--v-line)",
                   fontSize: 12.5,
+                  textDecoration: "none",
+                  color: "var(--ink)",
+                  fontWeight: 500,
                 }}
               >
-                <Ic name="doc" size={16} style={{ color: "var(--primary)" }} />
+                <Ic name="doc" size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
                 <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {a}
+                  Otvoriť prílohu k otázke č. {q.no}
                 </span>
-                <Ic name="download" size={15} style={{ color: "var(--primary)" }} />
-              </div>
+                <Ic name="download" size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+              </a>
             ))}
           </div>
         )}
