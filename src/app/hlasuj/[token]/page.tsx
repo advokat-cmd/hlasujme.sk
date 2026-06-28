@@ -12,12 +12,14 @@ interface PageProps {
 }
 
 function formatSlovakDate(date: Date) {
-  const day = date.getDate();
-  const month = date.getMonth() + 1;
-  const year = date.getFullYear();
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${day}. ${month}. ${year} o ${hours}:${minutes}`;
+  return date.toLocaleString("sk-SK", {
+    timeZone: "Europe/Bratislava",
+    day: "numeric",
+    month: "numeric",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).replace(",", " o");
 }
 
 export default async function VoterPage({ params }: PageProps) {

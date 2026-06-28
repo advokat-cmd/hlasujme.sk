@@ -168,7 +168,11 @@ export default function CreatePollPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          basics,
+          basics: {
+            ...basics,
+            start: new Date(basics.start).toISOString(),
+            end: new Date(basics.end).toISOString(),
+          },
           questions: questions.map((q) => ({
             text: q.text,
             majority: q.majority,
