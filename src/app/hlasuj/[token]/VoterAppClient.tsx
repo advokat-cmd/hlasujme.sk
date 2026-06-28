@@ -32,6 +32,7 @@ interface Poll {
   declarer: string;
   startAt: string;
   endAt: string;
+  files: Array<{ id: string; name: string; webViewLink: string; mimeType: string }>;
   questions: Question[];
 }
 
@@ -357,6 +358,43 @@ function VIntro({ poll, unit, building, voterName, inProgress, onStart }: VIntro
         <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 18px", lineHeight: 1.5 }}>
           {poll.reason}. Hlasuje sa o {poll.questions.length} otázkach.
         </p>
+
+        {poll.files && poll.files.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+              Priložené podklady na preštudovanie
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+              {poll.files.map((file) => (
+                <a
+                  key={file.id}
+                  href={file.webViewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    background: "var(--v-card)",
+                    border: "1px solid var(--v-line)",
+                    textDecoration: "none",
+                    color: "var(--ink)",
+                    fontSize: 13,
+                    fontWeight: 500,
+                  }}
+                >
+                  <Ic name="paper" size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {file.name}
+                  </span>
+                  <Ic name="chevR" size={12} style={{ color: "var(--ink-faint)", flexShrink: 0 }} />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div style={{ display: "flex", flexDirection: "column", gap: 9, marginBottom: 20 }}>
           {poll.questions.map((q) => (

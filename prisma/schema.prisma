@@ -118,6 +118,7 @@ model Poll {
   startAt      DateTime
   endAt        DateTime
   status       PollStatus   @default(draft)
+  driveFolderId String?
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

@@ -43,6 +43,9 @@ export const ICONS: Record<string, string | string[]> = {
     "M5 10v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-9",
     "M9 14h6",
   ],
+  folder: [
+    "M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"
+  ],
   bell: [
     "M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9",
     "M13.7 21a2 2 0 0 1-3.4 0",

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Ic } from "../ui/Icons";
@@ -86,6 +86,30 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const [closing, setClosing] = useState(false);
   const [filter, setFilter] = useState("all");
 
+  const [files, setFiles] = useState<any[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  const fetchFiles = async () => {
+    setLoadingFiles(true);
+    try {
+      const res = await fetch(`/api/admin/poll/${poll.id}/files`);
+      if (res.ok) {
+        const data = await res.json();
+        setFiles(data.files || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch files:", err);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchFiles();
+  }, [poll.id]);
+
   const disputedUnitsList = unitVotesList.filter((u) => u.disputed);
   const disputedUnitsCount = disputedUnitsList.length;
 
@@ -94,6 +118,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     { id: "units", label: "Účasť po jednotkách", icon: "building" },
     { id: "emails", label: "Pozvánky a e-maily", icon: "mail" },
     { id: "protocol", label: "Zápisnica", icon: "paper" },
+    { id: "documents", label: "Podklady a dokumenty", icon: "folder" },
   ];
 
   const filteredVoterRows = unitVotesList.filter((r) => {
@@ -854,6 +879,124 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 </div>
               ))}
             </div>
+          </Card>
+        </div>
+      )}
+
+      {tab === "documents" && (
+        <div>
+          <Card style={{ marginBottom: 20 }}>
+            <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: isMobile ? "wrap" : "nowrap" }}>
+              <div
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: 10,
+                  background: "var(--accent-bg)",
+                  color: "var(--accent-ink)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                }}
+              >
+                <Ic name="folder" size={20} />
+              </div>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <h4 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>Podklady na stiahnutie</h4>
+                <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>
+                  Tieto dokumenty sú uložené v zložke Google Drive. Môžete sem nahrať nové podklady alebo dokumenty
+                  k hlasovaniu, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať.
+                </p>
+              </div>
+              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, width: isMobile ? "100%" : "auto" }}>
+                <label style={{ display: "inline-block", cursor: "pointer", width: "100%" }}>
+                  <input
+                    type="file"
+                    style={{ display: "none" }}
+                    disabled={uploading}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      
+                      setUploading(true);
+                      setUploadError("");
+                      
+                      const formData = new FormData();
+                      formData.append("file", file);
+                      
+                      try {
+                        const res = await fetch(`/api/admin/poll/${poll.id}/upload`, {
+                          method: "POST",
+                          body: formData,
+                        });
+                        
+                        if (res.ok) {
+                          fetchFiles(); // Reload files
+                        } else {
+                          const data = await res.json();
+                          setUploadError(data.error || "Nahrávanie zlyhalo.");
+                        }
+                      } catch (err) {
+                        setUploadError("Chyba spojenia pri nahrávaní.");
+                      } finally {
+                        setUploading(false);
+                      }
+                    }}
+                  />
+                  <Btn kind="primary" icon={uploading ? "clock" : "plus"} disabled={uploading} style={{ width: "100%" }}>
+                    {uploading ? "Nahrávam..." : "Nahrať dokument"}
+                  </Btn>
+                </label>
+                {uploadError && <div style={{ fontSize: 12, color: "var(--disagree)" }}>{uploadError}</div>}
+              </div>
+            </div>
+          </Card>
+
+          <Card>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 12 }}>
+              Nahraté dokumenty
+            </div>
+
+            {loadingFiles ? (
+              <div style={{ padding: "20px 0", textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
+                Načítavam súbory z Google Drive...
+              </div>
+            ) : files.length === 0 ? (
+              <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
+                <Ic name="folder" size={24} style={{ color: "var(--ink-faint)", marginBottom: 8, display: "block", margin: "0 auto" }} />
+                Zatiaľ neboli nahraté žiadne podklady.
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {files.map((file) => (
+                  <div
+                    key={file.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      padding: "10px 12px",
+                      background: "var(--paper-2)",
+                      borderRadius: 10,
+                      border: "1px solid var(--line)",
+                      flexWrap: "wrap",
+                      gap: 8,
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flex: 1, minWidth: 200 }}>
+                      <Ic name="paper" size={17} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                      <span style={{ fontSize: 14, fontWeight: 500, wordBreak: "break-all" }}>{file.name}</span>
+                    </div>
+                    <Link href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                      <Btn kind="secondary" size="sm" icon="eye">
+                        Otvoriť
+                      </Btn>
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         </div>
       )}

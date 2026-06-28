@@ -5,6 +5,7 @@ import { VoterAppClient } from "./VoterAppClient";
 import { Card } from "@/components/ui/Card";
 import { Ic } from "@/components/ui/Icons";
 import { VoteAnswer } from "@prisma/client";
+import { listFilesInFolder } from "@/lib/gdrive";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -117,6 +118,8 @@ export default async function VoterPage({ params }: PageProps) {
   }
 
   // 4. Serialize data structures to bypass Date object transmission errors to client component
+  const driveFiles = poll.driveFolderId ? await listFilesInFolder(poll.driveFolderId) : [];
+
   const serializedPoll = {
     id: poll.id,
     title: poll.title,
@@ -124,6 +127,7 @@ export default async function VoterPage({ params }: PageProps) {
     declarer: poll.declarer,
     startAt: poll.startAt.toISOString(),
     endAt: poll.endAt.toISOString(),
+    files: driveFiles,
     questions: poll.questions.map((q) => ({
       id: q.id,
       no: q.no,

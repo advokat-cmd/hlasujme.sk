@@ -5,6 +5,7 @@ import { PollStatus, MajorityType } from "@prisma/client";
 import { generateVoteTokens } from "@/lib/tokens";
 import { sendEmail, getInvitationEmailHtml } from "@/lib/email";
 import { createAuditLogEntry } from "@/lib/hashChain";
+import { createDriveFolder } from "@/lib/gdrive";
 
 export async function POST(request: Request) {
   try {
@@ -33,6 +34,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Hlasovanie musí obsahovať aspoň jednu otázku." }, { status: 400 });
     }
 
+    // Create folder on Google Drive
+    const dateString = basics.start ? basics.start.split("T")[0] : new Date().toISOString().split("T")[0];
+    const folderName = `Podklady-hlasovanie-${dateString}`;
+    const driveFolderId = await createDriveFolder(folderName);
+
     // 2. Perform Database creation inside a transaction
     const newPoll = await db.$transaction(async (tx) => {
       const poll = await tx.poll.create({
@@ -44,6 +50,7 @@ export async function POST(request: Request) {
           startAt: new Date(basics.start),
           endAt: new Date(basics.end),
           status: PollStatus.active, // Set to active immediately
+          driveFolderId,
           buildingId: building.id,
           questions: {
             create: questions.map((q, idx) => ({
