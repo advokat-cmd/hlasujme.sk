@@ -115,6 +115,7 @@ export const ICONS: Record<string, string | string[]> = {
     "M21 12a9 9 0 0 1-15 6.7L3 16",
     "M3 21v-5h5",
   ],
+  menu: "M4 6h16M4 12h16M4 18h16",
 };
 
 interface IcProps {
