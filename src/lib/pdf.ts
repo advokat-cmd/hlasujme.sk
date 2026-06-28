@@ -160,11 +160,12 @@ export async function generateSealedPdf(pollId: string): Promise<Buffer> {
       doc.fillColor("#1B2330");
       doc.moveDown(0.3);
 
-      const majLabel = r.majorityType === "half-all" 
+      const normalizedMaj = r.majorityType.replace("_", "-");
+      const majLabel = normalizedMaj === "half-all" 
         ? "Nadpolovičná väčšina všetkých vlastníkov" 
-        : r.majorityType === "twothirds-all" 
+        : normalizedMaj === "twothirds-all" 
         ? "Dvojtretinová väčšina všetkých vlastníkov" 
-        : r.majorityType === "all" 
+        : normalizedMaj === "all" 
         ? "Súhlas všetkých vlastníkov" 
         : "Nadpolovičná väčšina zúčastnených";
 

@@ -95,7 +95,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
 
   return (
     <div className="admin-page-container">
-      <PageHead eyebrow={`${building.name} · ${building.address}`} title="Dom a vlastníci">
+      <PageHead
+        eyebrow={
+          building.address.toLowerCase().includes(building.name.replace(/bytový dom\s+/i, "").trim().toLowerCase())
+            ? (building.name.toLowerCase().startsWith("bytový dom") ? "Bytový dom " : "") + building.address
+            : `${building.name} · ${building.address}`
+        }
+        title="Dom a vlastníci"
+      >
         <Btn kind="secondary" icon="edit" onClick={() => setEditBuilding(true)}>
           Upraviť dom
         </Btn>

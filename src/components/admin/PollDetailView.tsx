@@ -134,23 +134,25 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   };
 
   const getMajorityLabel = (type: string) => {
+    const normalized = type.replace("_", "-");
     const map: Record<string, string> = {
       "half-all": "Nadpolovičná väčšina všetkých vlastníkov",
       "twothirds-all": "Dvojtretinová väčšina všetkých vlastníkov",
       all: "Súhlas všetkých vlastníkov",
       "half-present": "Nadpolovičná väčšina zúčastnených",
     };
-    return map[type] || type;
+    return map[normalized] || type;
   };
 
   const getMajorityFrac = (type: string) => {
+    const normalized = type.replace("_", "-");
     const map: Record<string, string> = {
       "half-all": "> 1/2 všetkých",
       "twothirds-all": "≥ 2/3 všetkých",
       all: "všetci",
       "half-present": "> 1/2 hlasujúcich",
     };
-    return map[type] || type;
+    return map[normalized] || type;
   };
 
   const renderVoteDot = (ans: string | null, isDisputed: boolean, note: string | null) => {
