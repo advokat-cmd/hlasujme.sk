@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef } from "react";
+import { useNarrow } from "./LayoutHelpers";
 import { Ic } from "./Icons";
 
 interface ModalProps {
@@ -23,6 +24,7 @@ export const Modal: React.FC<ModalProps> = ({
   width = 560,
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
+  const isMobile = useNarrow(600);
   const titleId = useRef("modal-title-" + Math.random().toString(36).slice(2, 8)).current;
 
   useEffect(() => {
@@ -80,7 +82,7 @@ export const Modal: React.FC<ModalProps> = ({
         alignItems: "center",
         justifyContent: "center",
         zIndex: 1000,
-        padding: 20,
+        padding: isMobile ? 8 : 20,
       }}
     >
       <div
@@ -93,17 +95,17 @@ export const Modal: React.FC<ModalProps> = ({
         style={{
           width,
           maxWidth: "100%",
-          maxHeight: "92vh",
+          maxHeight: isMobile ? "96vh" : "92vh",
           overflow: "auto",
           background: "var(--surface)",
-          borderRadius: 16,
+          borderRadius: isMobile ? 12 : 16,
           boxShadow: "0 30px 80px -20px rgba(0,0,0,.5)",
           outline: "none",
         }}
       >
         <div
           style={{
-            padding: "18px 22px",
+            padding: isMobile ? "14px 16px" : "18px 22px",
             borderBottom: "1px solid var(--line)",
             display: "flex",
             alignItems: "center",
@@ -150,11 +152,11 @@ export const Modal: React.FC<ModalProps> = ({
             <Ic name="x" size={20} />
           </button>
         </div>
-        <div style={{ padding: "20px 22px" }}>{children}</div>
+        <div style={{ padding: isMobile ? "16px 16px" : "20px 22px" }}>{children}</div>
         {footer && (
           <div
             style={{
-              padding: "14px 22px",
+              padding: isMobile ? "12px 16px" : "14px 22px",
               borderTop: "1px solid var(--line)",
               display: "flex",
               justifyContent: "flex-end",
