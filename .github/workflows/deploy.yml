@@ -24,7 +24,7 @@ jobs:
             git config --global --add safe.directory /var/www/hlasovanie
             git fetch --all
             git checkout main
-            git pull origin main
+            git reset --hard origin/main
             
             # Install dependencies (development dependencies are required for build)
             npm install --production=false
