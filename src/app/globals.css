@@ -107,3 +107,17 @@ button {
   }
 }
 
+.admin-page-container {
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 40px 48px 80px;
+}
+
+@media (max-width: 768px) {
+  .admin-page-container {
+    padding: 20px 16px 60px;
+  }
+}
+
+

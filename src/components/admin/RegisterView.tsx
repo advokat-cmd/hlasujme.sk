@@ -7,7 +7,7 @@ import { Btn } from "../ui/Button";
 import { Pill } from "../ui/Pill";
 import { Card } from "../ui/Card";
 import { Stat } from "../ui/Stat";
-import { TableScroll } from "../ui/LayoutHelpers";
+import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
@@ -72,6 +72,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
   stats,
 }) => {
   const router = useRouter();
+  const isMobile = useNarrow(600);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const [editBuilding, setEditBuilding] = useState(false);
@@ -93,7 +94,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
   };
 
   return (
-    <div style={{ maxWidth: 1080, width: "100%", margin: "0 auto", padding: "40px 48px 80px" }}>
+    <div className="admin-page-container">
       <PageHead eyebrow={`${building.name} · ${building.address}`} title="Dom a vlastníci">
         <Btn kind="secondary" icon="edit" onClick={() => setEditBuilding(true)}>
           Upraviť dom
@@ -142,190 +143,252 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
           <span style={{ fontSize: "12.5px", color: "var(--ink-soft)" }}>{list.length} jednotiek</span>
         </div>
         
-        <TableScroll minWidth={600}>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "64px 1fr 200px 150px 90px",
-              gap: 0,
-              fontSize: 12,
-              fontWeight: 600,
-              color: "var(--ink-faint)",
-              textTransform: "uppercase",
-              letterSpacing: 0.4,
-              padding: "10px 18px",
-              borderBottom: "1px solid var(--line)",
-              background: "var(--paper-2)",
-            }}
-          >
-            <div>Jedn.</div>
-            <div>Vlastník</div>
-            <div>Režim hlasovania</div>
-            <div>E-mail</div>
-            <div>Stav</div>
-          </div>
-          
-          {list.map((u) => {
-            const open = openId === u.id;
-            const noEmail = !u.email && u.coMode !== "internal";
-            return (
-              <div key={u.id} style={{ borderBottom: "1px solid var(--line)" }}>
-                <div
-                  role="button"
-                  tabIndex={0}
-                  aria-expanded={open}
-                  aria-label={`Byt č. ${u.no} — ${u.owners[0]?.name || "Vlastník"}, ${open ? "zbaliť" : "rozbaliť"} detail`}
-                  onClick={() => setOpenId(open ? null : u.id)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setOpenId(open ? null : u.id);
-                    }
-                  }}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "64px 1fr 200px 150px 90px",
-                    gap: 0,
-                    alignItems: "center",
-                    padding: "12px 18px",
-                    cursor: "pointer",
-                    fontSize: "13.5px",
-                    background: open ? "var(--paper-2)" : "transparent",
-                  }}
-                >
-                  <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
-                    {u.no}
-                    {u.type === "nebyt" && <div style={{ fontSize: 10, fontWeight: 600, color: "var(--accent-ink)" }}>NP</div>}
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontWeight: 600 }}>{u.owners[0]?.name || "Vlastník"}</span>
-                    {u.owners.length > 1 && <Pill tone="neutral" size="sm">+{u.owners.length - 1}</Pill>}
-                  </div>
-                  <div>
-                    <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
-                      {CO_MODE_LABEL[u.coMode]}
-                    </Pill>
-                  </div>
+        <div style={isMobile ? {} : { overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={isMobile ? {} : { minWidth: 600 }}>
+            {!isMobile && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "64px 1fr 200px 150px 90px",
+                  gap: 0,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--ink-faint)",
+                  textTransform: "uppercase",
+                  letterSpacing: 0.4,
+                  padding: "10px 18px",
+                  borderBottom: "1px solid var(--line)",
+                  background: "var(--paper-2)",
+                }}
+              >
+                <div>Jedn.</div>
+                <div>Vlastník</div>
+                <div>Režim hlasovania</div>
+                <div>E-mail</div>
+                <div>Stav</div>
+              </div>
+            )}
+            
+            {list.map((u) => {
+              const open = openId === u.id;
+              const noEmail = !u.email && u.coMode !== "internal";
+              return (
+                <div key={u.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <div
-                    style={{
-                      fontSize: "12.5px",
-                      color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={open}
+                    aria-label={`Byt č. ${u.no} — ${u.owners[0]?.name || "Vlastník"}, ${open ? "zbaliť" : "rozbaliť"} detail`}
+                    onClick={() => setOpenId(open ? null : u.id)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setOpenId(open ? null : u.id);
+                      }
+                    }}
+                    style={isMobile ? {
                       display: "flex",
+                      flexDirection: "column",
+                      alignItems: "stretch",
+                      gap: 8,
+                      padding: "16px 14px",
+                      cursor: "pointer",
+                      fontSize: "13.5px",
+                      background: open ? "var(--paper-2)" : "transparent",
+                    } : {
+                      display: "grid",
+                      gridTemplateColumns: "64px 1fr 200px 150px 90px",
+                      gap: 0,
                       alignItems: "center",
-                      gap: 5,
+                      padding: "12px 18px",
+                      cursor: "pointer",
+                      fontSize: "13.5px",
+                      background: open ? "var(--paper-2)" : "transparent",
                     }}
                   >
-                    {noEmail ? (
+                    {isMobile ? (
                       <>
-                        <Ic name="alert" size={13} /> chýba
-                      </>
-                    ) : (
-                      <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                        {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <Ic
-                      name="chevD"
-                      size={16}
-                      style={{
-                        color: "var(--ink-faint)",
-                        transform: open ? "rotate(180deg)" : "none",
-                        transition: "transform .2s",
-                      }}
-                    />
-                  </div>
-                </div>
-                
-                {open && (
-                  <div style={{ padding: "4px 18px 20px 82px", background: "var(--paper-2)" }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: "12.5px" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
-                          Typ
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>
-                          {u.type === "byt" ? "Byt" : u.label || "Nebytový priestor"} · {u.floor} poschodie
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
-                          Počet hlasov
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{u.votes}</div>
-                      </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                        <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
-                          Režim spoluvlastníctva
-                        </div>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{CO_MODE_LABEL[u.coMode]}</div>
-                      </div>
-                      {u.actingPerson && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                          <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
-                            Koná za vlastníka
-                          </div>
-                          <div style={{ fontSize: 13, fontWeight: 500 }}>{u.actingPerson}</div>
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
-                      {u.owners.map((o, idx) => (
-                        <div
-                          key={o.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 10,
-                            padding: "8px 12px",
-                            background: "var(--surface)",
-                            border: "1px solid var(--line)",
-                            borderRadius: 9,
-                          }}
-                        >
-                          <div
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontWeight: 700, fontSize: "14px" }}>
+                            Jednotka {u.no} {u.type === "nebyt" && <span style={{ fontSize: 10, fontWeight: 600, color: "var(--accent-ink)", marginLeft: 6 }}>NP</span>}
+                          </span>
+                          <Ic
+                            name="chevD"
+                            size={16}
                             style={{
-                              width: 30,
-                              height: 30,
-                              borderRadius: 999,
-                              background: "var(--primary-bg)",
-                              color: "var(--primary)",
+                              color: "var(--ink-faint)",
+                              transform: open ? "rotate(180deg)" : "none",
+                              transition: "transform .2s",
+                            }}
+                          />
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 600 }}>{u.owners[0]?.name || "Vlastník"}</span>
+                          {u.owners.length > 1 && <Pill tone="neutral" size="sm">+{u.owners.length - 1}</Pill>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
+                            {CO_MODE_LABEL[u.coMode]}
+                          </Pill>
+                          <span
+                            style={{
+                              fontSize: "12.5px",
+                              color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
                               display: "flex",
                               alignItems: "center",
-                              justifyContent: "center",
-                              fontSize: 12,
-                              fontWeight: 700,
+                              gap: 5,
                             }}
                           >
-                            {getOwnerInitials(o.name)}
+                            {noEmail ? (
+                              <>
+                                <Ic name="alert" size={13} /> chýba e-mail
+                              </>
+                            ) : (
+                              <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: 200 }}>
+                                {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: 700, fontVariantNumeric: "tabular-nums" }}>
+                          {u.no}
+                          {u.type === "nebyt" && <div style={{ fontSize: 10, fontWeight: 600, color: "var(--accent-ink)" }}>NP</div>}
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontWeight: 600 }}>{u.owners[0]?.name || "Vlastník"}</span>
+                          {u.owners.length > 1 && <Pill tone="neutral" size="sm">+{u.owners.length - 1}</Pill>}
+                        </div>
+                        <div>
+                          <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
+                            {CO_MODE_LABEL[u.coMode]}
+                          </Pill>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "12.5px",
+                            color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 5,
+                          }}
+                        >
+                          {noEmail ? (
+                            <>
+                              <Ic name="alert" size={13} /> chýba
+                            </>
+                          ) : (
+                            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <Ic
+                            name="chevD"
+                            size={16}
+                            style={{
+                              color: "var(--ink-faint)",
+                              transform: open ? "rotate(180deg)" : "none",
+                              transition: "transform .2s",
+                            }}
+                          />
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  
+                  {open && (
+                    <div style={{ padding: isMobile ? "12px 14px 20px" : "4px 18px 20px 82px", background: "var(--paper-2)" }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 24, fontSize: "12.5px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
+                            Typ
                           </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 7 }}>
-                              {o.name}
-                              {u.coMode === "rep" && idx === 0 && <Pill tone="accent" size="sm" icon="check">hlasuje za byt</Pill>}
-                              {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
-                            </div>
-                            <div style={{ fontSize: "11.5px", color: "var(--ink-soft)" }}>
-                              {o.email || "bez e-mailu"} · podiel {Math.round(o.share * 100)}%
-                            </div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>
+                            {u.type === "byt" ? "Byt" : u.label || "Nebytový priestor"} · {u.floor} poschodie
                           </div>
                         </div>
-                      ))}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
+                            Počet hlasov
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{u.votes}</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                          <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
+                            Režim spoluvlastníctva
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 500 }}>{CO_MODE_LABEL[u.coMode]}</div>
+                        </div>
+                        {u.actingPerson && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            <div style={{ color: "var(--ink-faint)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.4, fontSize: "10.5px" }}>
+                              Koná za vlastníka
+                            </div>
+                            <div style={{ fontSize: 13, fontWeight: 500 }}>{u.actingPerson}</div>
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                        {u.owners.map((o, idx) => (
+                          <div
+                            key={o.id}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 10,
+                              padding: "8px 12px",
+                              background: "var(--surface)",
+                              border: "1px solid var(--line)",
+                              borderRadius: 9,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: 30,
+                                height: 30,
+                                borderRadius: 999,
+                                background: "var(--primary-bg)",
+                                color: "var(--primary)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: 12,
+                                fontWeight: 700,
+                              }}
+                            >
+                              {getOwnerInitials(o.name)}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 600, display: "flex", alignItems: "center", gap: 7, flexWrap: "wrap" }}>
+                                {o.name}
+                                {u.coMode === "rep" && idx === 0 && <Pill tone="accent" size="sm" icon="check">hlasuje za byt</Pill>}
+                                {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
+                              </div>
+                              <div style={{ fontSize: "11.5px", color: "var(--ink-soft)" }}>
+                                {o.email || "bez e-mailu"} · podiel {Math.round(o.share * 100)}%
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div style={{ marginTop: 14 }}>
+                        <Btn kind="secondary" size="sm" icon="edit" onClick={() => setEditUnitId(u.id)}>
+                          Upraviť jednotku a vlastníkov
+                        </Btn>
+                      </div>
                     </div>
-                    
-                    <div style={{ marginTop: 14 }}>
-                      <Btn kind="secondary" size="sm" icon="edit" onClick={() => setEditUnitId(u.id)}>
-                        Upraviť jednotku a vlastníkov
-                      </Btn>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </TableScroll>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </Card>
 
       {editBuilding && (

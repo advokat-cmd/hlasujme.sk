@@ -170,7 +170,7 @@ export default async function AdminDashboard() {
     : "";
 
   return (
-    <div style={{ maxWidth: 1080, width: "100%", margin: "0 auto", padding: "40px 48px 80px" }}>
+    <div className="admin-page-container">
       <PageHead eyebrow={building.name} title="Prehľad">
         <Link href="/admin/register" style={{ textDecoration: "none" }}>
           <Btn kind="secondary" icon="users">Vlastníci</Btn>

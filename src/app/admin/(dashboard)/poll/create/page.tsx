@@ -140,7 +140,7 @@ export default function CreatePollPage() {
   };
 
   return (
-    <div style={{ maxWidth: 1080, width: "100%", margin: "0 auto", padding: "40px 48px 80px" }}>
+    <div className="admin-page-container">
       <PageHead eyebrow="Nové elektronické hlasovanie" title="Vytvoriť hlasovanie">
         <Link href="/admin" style={{ textDecoration: "none" }}>
           <Btn kind="ghost">Zrušiť</Btn>
