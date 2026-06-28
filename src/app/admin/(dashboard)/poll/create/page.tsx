@@ -121,7 +121,7 @@ export default function CreatePollPage() {
           questions: questions.map((q) => ({
             text: q.text,
             majority: q.majority,
-            note: q.note || "",
+            note: "",
           })),
         }),
       });
@@ -461,27 +461,7 @@ export default function CreatePollPage() {
                       </div>
                     </FormRow>
                     
-                    <FormRow label="Poznámka / Odkaz na zákon (nepovinné)" hint="Napr. citácia znenia zákona o vlastníctve bytov.">
-                      <textarea
-                        style={{
-                          width: "100%",
-                          boxSizing: "border-box",
-                          padding: "10px 13px",
-                          borderRadius: 9,
-                          border: "1px solid var(--line)",
-                          fontFamily: "inherit",
-                          fontSize: "13.5px",
-                          background: "var(--paper)",
-                          color: "var(--ink)",
-                          minHeight: 56,
-                          resize: "vertical",
-                          lineHeight: 1.5,
-                        }}
-                        placeholder="Podľa § 14b..."
-                        value={q.note || ""}
-                        onChange={(e) => setQVal(q.id, { note: e.target.value })}
-                      />
-                    </FormRow>
+
 
                     <FormRow label="Podkladový dokument k otázke (nepovinné)" hint="Súbor bude nahraný na Google Drive a sprístupnený vlastníkom pri hlasovaní.">
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>

@@ -43,7 +43,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [majorityType, setMajorityType] = useState("half-all");
-  const [note, setNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -51,7 +50,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
     setTitle("");
     setText("");
     setMajorityType("half-all");
-    setNote("");
     setError("");
     setEditingTemplate(null);
     setModalOpen(true);
@@ -61,7 +59,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
     setTitle(t.title);
     setText(t.text);
     setMajorityType(t.majorityType);
-    setNote(t.note);
     setError("");
     setEditingTemplate(t);
     setModalOpen(true);
@@ -105,7 +102,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
           title: title.trim(),
           text: text.trim(),
           majorityType,
-          note: note.trim() || null,
+          note: null,
         }),
       });
 
@@ -163,22 +160,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
                   <p style={{ margin: "0 0 10px", fontSize: "13.5px", color: "var(--ink-soft)", lineHeight: 1.5 }}>
                     <strong>Návrh uznesenia:</strong> {t.text}
                   </p>
-
-                  {t.note && (
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "var(--ink-soft)",
-                        background: "var(--paper-2)",
-                        border: "1px solid var(--line)",
-                        padding: "8px 12px",
-                        borderRadius: 7,
-                        lineHeight: 1.45,
-                      }}
-                    >
-                      💡 <strong>Právny odkaz:</strong> {t.note}
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
@@ -288,28 +269,6 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
               <option value="all">Súhlas všetkých vlastníkov (Napr. zmena podielov, prevod vlastníctva)</option>
               <option value="half-present">Nadpolovičná väčšina zúčastnených (Po hodine čakania na schôdzi)</option>
             </select>
-          </FormRow>
-
-          <FormRow label="Právna poznámka / Odkaz na zákon (nepovinné)" hint="Napr. citácia príslušného paragrafu zákona 182/1993 Z.z.">
-            <textarea
-              style={{
-                width: "100%",
-                boxSizing: "border-box",
-                padding: "10px 13px",
-                borderRadius: 9,
-                border: "1px solid var(--line)",
-                fontFamily: "inherit",
-                fontSize: "13.5px",
-                background: "var(--paper)",
-                color: "var(--ink)",
-                minHeight: 70,
-                resize: "vertical",
-                lineHeight: 1.5,
-              }}
-              placeholder="Podľa § 14b ods..."
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-            />
           </FormRow>
         </Modal>
       )}
