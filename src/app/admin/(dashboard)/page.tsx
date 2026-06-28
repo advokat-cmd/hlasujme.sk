@@ -1,5 +1,6 @@
 import React from "react";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PollStatus, VoteAnswer, MajorityType } from "@prisma/client";
 import { getEffectiveUnitVote, tallyQuestion } from "@/lib/engine";
@@ -10,10 +11,15 @@ import { Pill } from "@/components/ui/Pill";
 import { Stat } from "@/components/ui/Stat";
 import { Progress } from "@/components/ui/Progress";
 import { Ic } from "@/components/ui/Icons";
+import { getAdminSession } from "@/lib/session";
 
 export const revalidate = 0; // Disable server caching for real-time dashboard data
 
 export default async function AdminDashboard() {
+  const session = await getAdminSession();
+  if (!session) {
+    redirect("/admin/login");
+  }
   // 1. Fetch building details (default to first seeded building)
   const building = await db.building.findFirst();
   if (!building) {
@@ -132,6 +138,15 @@ export default async function AdminDashboard() {
     take: 4
   });
 
+  // 5.5 Fetch login history logs for Superadmin
+  const loginLogs = session.role === "superadmin"
+    ? await db.auditLog.findMany({
+        where: { action: "USER_LOGIN" },
+        orderBy: { createdAt: "desc" },
+        take: 20
+      })
+    : [];
+
   // 6. Generate Alerts
   const alerts: any[] = [];
   
@@ -168,6 +183,164 @@ export default async function AdminDashboard() {
   const formattedEnd = activePoll 
     ? activePoll.endAt.toLocaleString("sk-SK", { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) 
     : "";
+
+  if (session.role === "vlastnik") {
+    return (
+      <div className="admin-page-container">
+        <PageHead eyebrow={building.name} title="Klientská zóna vlastníka" />
+
+        {activePoll ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, marginBottom: 28 }}>
+            <Card pad={0}>
+              <div style={{ display: "flex", flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 350px", padding: "26px 28px", borderRight: "1px solid var(--line)" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                    <Pill tone="primary" size="sm" icon="vote">Prebieha hlasovanie</Pill>
+                  </div>
+                  <h2 style={{ fontFamily: "var(--serif)", fontSize: 21, fontWeight: 600, margin: "0 0 8px" }}>
+                    {activePoll.title}
+                  </h2>
+                  <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 16px" }}>
+                    {activePoll.reason}
+                  </p>
+
+                  <div style={{ fontSize: "12px", color: "var(--ink-soft)", margin: "14px 0" }}>
+                    <strong>Koniec hlasovania:</strong> {new Date(activePoll.endAt).toLocaleString("sk-SK")}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 7 }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>Účasť vlastníkov</span>
+                    <span style={{ fontSize: 13, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
+                      {votedUnits} / {totalEligible} jednotiek
+                    </span>
+                    <span style={{ marginLeft: "auto", fontFamily: "var(--serif)", fontSize: 20, fontWeight: 600, whiteSpace: "nowrap" }}>
+                      {turnout} %
+                    </span>
+                  </div>
+                  <Progress value={votedUnits} total={totalEligible} />
+
+                  <div style={{ marginTop: 16, fontSize: "12.5px", color: "var(--ink-soft)", background: "var(--paper-2)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)" }}>
+                    ℹ️ <strong>Ako hlasovať?</strong> Odkaz na elektronické hlasovanie Vám bol zaslaný na Váš e-mail. Ak ste ho nedostali, kontaktujte správcu domu.
+                  </div>
+                </div>
+
+                <div style={{ flex: "1 1 260px", padding: "26px 28px", background: "var(--paper-2)" }}>
+                  <div style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
+                    Stav prebiehajúcich otázok
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {activePollQuestionsTallies.map((q) => {
+                      const toneMap = {
+                        approved: "success",
+                        rejected: "danger",
+                        short: "accent"
+                      };
+                      const labelMap = {
+                        approved: "Schválené",
+                        rejected: "Neschválené",
+                        short: "Zatiaľ nedosiahnutá väčšina"
+                      };
+                      const iconMap = {
+                        approved: "checkCircle",
+                        rejected: "xCircle",
+                        short: "clock"
+                      };
+                      const currentStatus = q.status as "approved" | "rejected" | "short";
+
+                      return (
+                        <div key={q.no}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>{q.no}.</span>
+                            <span style={{ fontSize: 13, fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {q.title}
+                            </span>
+                            <Pill tone={toneMap[currentStatus] as any} size="sm" icon={iconMap[currentStatus]}>
+                              {labelMap[currentStatus]}
+                            </Pill>
+                          </div>
+                          <Progress
+                            height={7}
+                            total={q.total}
+                            threshold={q.need}
+                            segments={[
+                              { value: q.agree, color: "var(--agree)" },
+                              { value: q.disagree, color: "var(--disagree)" },
+                            ]}
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <Card style={{ padding: "45px 30px", textAlign: "center", marginBottom: 28 }}>
+            <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
+              <Ic name="vote" size={24} style={{ color: "var(--ink-soft)" }} />
+            </div>
+            <h3 style={{ fontFamily: "var(--serif)", fontSize: 19, margin: "0 0 6px" }}>Aktuálne neprebieha žiadne hlasovanie</h3>
+            <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0" }}>Všetky predchádzajúce hlasovania a zápisnice nájdete nižšie v archíve.</p>
+          </Card>
+        )}
+
+        <Card>
+          <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
+            Archív a výsledky hlasovaní
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            {archivedPolls.length > 0 ? (
+              archivedPolls.map((a, i) => {
+                return (
+                  <div
+                    key={a.id}
+                    style={{
+                      display: "flex",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px 18px",
+                      padding: "14px 18px",
+                      borderBottom: i < archivedPolls.length - 1 ? "1px solid var(--line)" : "none",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 240 }}>
+                      <div style={{ fontSize: "14.5px", fontWeight: 600, color: "var(--ink)" }}>{a.title}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 2 }}>
+                        Ukončené: {new Date(a.endAt).toLocaleDateString("sk-SK")}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      {a.sealedResult ? (
+                        <a
+                          href={`/api/sealed/${a.id}/pdf`}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ textDecoration: "none" }}
+                        >
+                          <Btn kind="secondary" size="sm" icon="download">
+                            Stiahnuť zápisnicu (PDF)
+                          </Btn>
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>Zápisnica sa generuje...</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ fontSize: 13, color: "var(--ink-soft)", textAlign: "center", padding: "20px 0" }}>
+                Žiadne ukončené hlasovania.
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="admin-page-container">
@@ -406,6 +579,67 @@ export default async function AdminDashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Superadmin Login History Log */}
+      {session.role === "superadmin" && (
+        <Card style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <Ic name="clock" size={20} style={{ color: "var(--primary)" }} />
+            <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 600, color: "var(--ink)" }}>
+              História prihlásení do systému (Superadmin)
+            </div>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {loginLogs.length > 0 ? (
+              loginLogs.map((log) => {
+                let payload: any = {};
+                try {
+                  payload = JSON.parse(log.payload);
+                } catch (e) {}
+
+                const dateStr = new Date(log.createdAt).toLocaleString("sk-SK", {
+                  day: "2-digit",
+                  month: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                });
+
+                return (
+                  <div
+                    key={log.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 12,
+                      padding: "10px 14px",
+                      borderBottom: "1px solid var(--line)",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <div>
+                      <strong>{payload.name || "Neznámy"}</strong>{" "}
+                      <span style={{ color: "var(--ink-soft)" }}>({payload.email || "bez emailu"})</span>
+                      <div style={{ fontSize: "11px", color: "var(--ink-soft)", marginTop: 2 }}>
+                        Rola: {payload.role === "superadmin" ? "Superadmin" : payload.role === "admin" ? "Administrátor" : "Vlastník"} · IP: {payload.ip || "—"}
+                      </div>
+                    </div>
+                    <span style={{ fontSize: "12px", color: "var(--ink-soft)", whiteSpace: "nowrap" }}>
+                      {dateStr}
+                    </span>
+                  </div>
+                );
+              })
+            ) : (
+              <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "14px 0", textAlign: "center" }}>
+                Žiadne záznamy o prihlásení.
+              </p>
+            )}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

@@ -10,8 +10,8 @@ export async function POST(
 ) {
   try {
     const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const { id: pollId } = await params;

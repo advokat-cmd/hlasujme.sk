@@ -11,8 +11,8 @@ export async function POST(request: Request) {
   try {
     // 1. Verify admin session
     const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const building = await db.building.findFirst();

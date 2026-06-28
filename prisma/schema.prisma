@@ -93,6 +93,7 @@ model Admin {
   email        String   @unique
   passwordHash String   // Argon2id hash
   name         String
+  role         String   @default("admin") // "superadmin", "admin", "vlastnik"
   totpSecret   String?
   createdAt    DateTime @default(now())
 

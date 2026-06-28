@@ -12,6 +12,9 @@ export default async function AdminRegisterPage() {
   if (!session) {
     redirect("/admin/login");
   }
+  if (session.role === "vlastnik") {
+    redirect("/admin");
+  }
 
   // 2. Fetch building details
   const building = await db.building.findFirst();

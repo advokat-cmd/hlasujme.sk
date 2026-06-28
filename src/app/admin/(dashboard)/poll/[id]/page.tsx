@@ -183,6 +183,7 @@ export default async function AdminPollDetailPage({
       questions={questionsTallies}
       unitVotesList={unitVotesList}
       emailStats={emailStats}
+      userRole={session.role}
     />
   );
 }

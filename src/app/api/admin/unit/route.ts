@@ -8,8 +8,8 @@ import * as argon2 from "argon2";
 export async function POST(request: Request) {
   try {
     const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const building = await db.building.findFirst();
@@ -70,29 +70,32 @@ export async function POST(request: Request) {
     // Create admin user if requested
     for (let i = 0; i < owners.length; i++) {
       const o = owners[i];
-      if (o.admin && o.password) {
-        const loginEmail = (o.email || email).trim().toLowerCase();
-        if (loginEmail) {
-          const passwordHash = await argon2.hash(o.password, { type: argon2.argon2id });
-          const ownerRecord = unit.owners[i];
-          
-          await db.admin.upsert({
-            where: { email: loginEmail },
-            update: {
-              passwordHash,
-              name: ownerRecord.name,
-              unitId: unit.id,
-              ownerId: ownerRecord.id,
-            },
-            create: {
-              email: loginEmail,
-              passwordHash,
-              name: ownerRecord.name,
-              unitId: unit.id,
-              ownerId: ownerRecord.id,
-            },
-          });
-        }
+      const loginEmail = o.email?.trim().toLowerCase();
+      if (loginEmail && (o.admin || o.password)) {
+        const role = o.admin ? "admin" : "vlastnik";
+        const passwordHash = o.password 
+          ? await argon2.hash(o.password, { type: argon2.argon2id })
+          : await argon2.hash("demo1234", { type: argon2.argon2id });
+        const ownerRecord = unit.owners[i];
+        
+        await db.admin.upsert({
+          where: { email: loginEmail },
+          update: {
+            passwordHash,
+            name: ownerRecord.name,
+            role,
+            unitId: unit.id,
+            ownerId: ownerRecord.id,
+          },
+          create: {
+            email: loginEmail,
+            passwordHash,
+            name: ownerRecord.name,
+            role,
+            unitId: unit.id,
+            ownerId: ownerRecord.id,
+          },
+        });
       }
     }
 

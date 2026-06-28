@@ -14,8 +14,10 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const submit = async (e?: any) => {
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
     if (loading) return;
 
     setError("");
@@ -77,7 +79,7 @@ export default function AdminLoginPage() {
         </div>
         
         <Card>
-          <form onSubmit={submit}>
+          <div>
             <FormRow label="E-mail">
               <Input
                 type="email"
@@ -101,6 +103,11 @@ export default function AdminLoginPage() {
                   setPassword(e.target.value);
                   setError("");
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    submit(e);
+                  }
+                }}
                 placeholder="••••••••"
                 required
               />
@@ -122,10 +129,10 @@ export default function AdminLoginPage() {
               </div>
             )}
             
-            <Btn type="submit" kind="primary" full size="lg" icon="lock" disabled={loading}>
+            <Btn onClick={submit} kind="primary" full size="lg" icon="lock" disabled={loading}>
               {loading ? "Prihlasovanie..." : "Prihlásiť sa"}
             </Btn>
-          </form>
+          </div>
         </Card>
 
       </div>

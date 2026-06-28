@@ -73,6 +73,7 @@ interface PollDetailViewProps {
     missingEmailsCount: number;
     missingEmailsUnits: string[];
   };
+  userRole?: string;
 }
 
 export const PollDetailView: React.FC<PollDetailViewProps> = ({
@@ -80,6 +81,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   questions,
   unitVotesList,
   emailStats,
+  userRole,
 }) => {
   const router = useRouter();
   const isMobile = useNarrow(600);
@@ -115,13 +117,19 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const disputedUnitsList = unitVotesList.filter((u) => u.disputed);
   const disputedUnitsCount = disputedUnitsList.length;
 
-  const tabs = [
-    { id: "results", label: "Otázky a výsledky", icon: "scale" },
-    { id: "units", label: "Účasť po jednotkách", icon: "building" },
-    { id: "emails", label: "Pozvánky a e-maily", icon: "mail" },
-    { id: "protocol", label: "Zápisnica", icon: "paper" },
-    { id: "documents", label: "Podklady a dokumenty", icon: "folder" },
-  ];
+  const tabs = userRole === "vlastnik"
+    ? [
+        { id: "results", label: "Otázky a výsledky", icon: "scale" },
+        { id: "protocol", label: "Zápisnica", icon: "paper" },
+        { id: "documents", label: "Podklady a dokumenty", icon: "folder" },
+      ]
+    : [
+        { id: "results", label: "Otázky a výsledky", icon: "scale" },
+        { id: "units", label: "Účasť po jednotkách", icon: "building" },
+        { id: "emails", label: "Pozvánky a e-maily", icon: "mail" },
+        { id: "protocol", label: "Zápisnica", icon: "paper" },
+        { id: "documents", label: "Podklady a dokumenty", icon: "folder" },
+      ];
 
   const filteredVoterRows = unitVotesList.filter((r) => {
     if (filter === "voted") return r.voted;
@@ -230,7 +238,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   return (
     <div className="admin-page-container">
       <PageHead eyebrow={`Bytový dom Björnsonova 3 · ${poll.status === "active" ? "prebieha" : "ukončené"}`} title={poll.title}>
-        {poll.status === "active" && (
+        {poll.status === "active" && userRole !== "vlastnik" && (
           <>
             <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
               Uzavrieť hlasovanie
@@ -1080,51 +1088,54 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
               <div style={{ flex: 1, minWidth: 200 }}>
                 <h4 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 600 }}>Podklady na stiahnutie</h4>
                 <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>
-                  Tieto dokumenty sú uložené v zložke Google Drive. Môžete sem nahrať nové podklady alebo dokumenty
-                  k hlasovaniu, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať.
+                  {userRole === "vlastnik"
+                    ? "Tieto dokumenty sú priložené k tomuto hlasovaniu. Môžete si ich kedykoľvek stiahnuť a prezerať."
+                    : "Tieto dokumenty sú uložené v zložke Google Drive. Môžete sem nahrať nové podklady alebo dokumenty k hlasovaniu, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať."}
                 </p>
               </div>
-              <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, width: isMobile ? "100%" : "auto" }}>
-                <label style={{ display: "inline-block", cursor: "pointer", width: "100%" }}>
-                  <input
-                    type="file"
-                    style={{ display: "none" }}
-                    disabled={uploading}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      
-                      setUploading(true);
-                      setUploadError("");
-                      
-                      const formData = new FormData();
-                      formData.append("file", file);
-                      
-                      try {
-                        const res = await fetch(`/api/admin/poll/${poll.id}/upload`, {
-                          method: "POST",
-                          body: formData,
-                        });
+              {userRole !== "vlastnik" && (
+                <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, width: isMobile ? "100%" : "auto" }}>
+                  <label style={{ display: "inline-block", cursor: "pointer", width: "100%" }}>
+                    <input
+                      type="file"
+                      style={{ display: "none" }}
+                      disabled={uploading}
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
                         
-                        if (res.ok) {
-                          fetchFiles(); // Reload files
-                        } else {
-                          const data = await res.json();
-                          setUploadError(data.error || "Nahrávanie zlyhalo.");
+                        setUploading(true);
+                        setUploadError("");
+                        
+                        const formData = new FormData();
+                        formData.append("file", file);
+                        
+                        try {
+                          const res = await fetch(`/api/admin/poll/${poll.id}/upload`, {
+                            method: "POST",
+                            body: formData,
+                          });
+                          
+                          if (res.ok) {
+                            fetchFiles(); // Reload files
+                          } else {
+                            const data = await res.json();
+                            setUploadError(data.error || "Nahrávanie zlyhalo.");
+                          }
+                        } catch (err) {
+                          setUploadError("Chyba spojenia pri nahrávaní.");
+                        } finally {
+                          setUploading(false);
                         }
-                      } catch (err) {
-                        setUploadError("Chyba spojenia pri nahrávaní.");
-                      } finally {
-                        setUploading(false);
-                      }
-                    }}
-                  />
-                  <Btn kind="primary" icon={uploading ? "clock" : "plus"} disabled={uploading} style={{ width: "100%" }}>
-                    {uploading ? "Nahrávam..." : "Nahrať dokument"}
-                  </Btn>
-                </label>
-                {uploadError && <div style={{ fontSize: 12, color: "var(--disagree)" }}>{uploadError}</div>}
-              </div>
+                      }}
+                    />
+                    <Btn kind="primary" icon={uploading ? "clock" : "plus"} disabled={uploading} style={{ width: "100%" }}>
+                      {uploading ? "Nahrávam..." : "Nahrať dokument"}
+                    </Btn>
+                  </label>
+                  {uploadError && <div style={{ fontSize: 12, color: "var(--disagree)" }}>{uploadError}</div>}
+                </div>
+              )}
             </div>
           </Card>
 

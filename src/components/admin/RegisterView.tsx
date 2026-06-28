@@ -81,6 +81,30 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
   const [editUnitId, setEditUnitId] = useState<string | null>(null);
   const [creatingUnit, setCreatingUnit] = useState(false);
 
+  const [sendingCredsOwnerId, setSendingCredsOwnerId] = useState<string | null>(null);
+
+  const handleSendCredentials = async (unitId: string, ownerId: string, ownerName: string, email: string) => {
+    if (!confirm(`Naozaj chcete vygenerovať a odoslať nové prihlasovacie údaje pre vlastníka ${ownerName} na e-mail ${email}?`)) {
+      return;
+    }
+    setSendingCredsOwnerId(ownerId);
+    try {
+      const res = await fetch(`/api/admin/unit/${unitId}/owner/${ownerId}/send-credentials`, {
+        method: "POST"
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Odoslanie prihlasovacích údajov zlyhalo.");
+      } else {
+        alert(`Prihlasovacie údaje boli úspešne vygenerované a odoslané na e-mail ${email}.`);
+      }
+    } catch (err) {
+      alert("Chyba sieťového pripojenia.");
+    } finally {
+      setSendingCredsOwnerId(null);
+    }
+  };
+
   const list = units.filter((u) => {
     const s = `${u.no} ${u.owners.map((o) => o.name).join(" ")} ${CO_MODE_LABEL[u.coMode]}`.toLowerCase();
     return s.includes(q.toLowerCase());
@@ -391,6 +415,36 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                                 <span>nar: {o.birthDate || "—"}</span>
                               </div>
                             </div>
+
+                            {o.email && (
+                              <button
+                                type="button"
+                                disabled={sendingCredsOwnerId === o.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendCredentials(u.id, o.id, o.name, o.email!);
+                                }}
+                                style={{
+                                  marginLeft: "auto",
+                                  background: "none",
+                                  border: "none",
+                                  color: "var(--primary)",
+                                  cursor: "pointer",
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 5,
+                                  padding: "6px 10px",
+                                  borderRadius: 7,
+                                  backgroundColor: "var(--primary-bg)",
+                                  flexShrink: 0,
+                                }}
+                              >
+                                <Ic name="send" size={13} />
+                                {sendingCredsOwnerId === o.id ? "Odosielam..." : "Odoslať prístup"}
+                              </button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -748,6 +802,16 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
               <Input value={o.birthDate || ""} onChange={(e) => setOwner(idx, "birthDate", e.target.value)} placeholder="napr. 12.03.1985" />
             </FormRow>
           </div>
+
+          <FormRow label="Prihlasovacie heslo" hint="Ak zostane prázdne, heslo sa nezmení. Zadaním nového hesla umožníte vlastníkovi prihlásiť sa a sledovať výsledky.">
+            <Input
+              type="password"
+              placeholder="Nové heslo (nepovinné)"
+              value={o.password || ""}
+              onChange={(e) => setOwner(idx, "password", e.target.value)}
+              autoComplete="new-password"
+            />
+          </FormRow>
 
           <FormRow label="Rola" hint="Administrátor sa môže prihlásiť do aplikácie a spravovať dom, hlasovania a vlastníkov.">
             <div style={{ display: "flex", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: 9, padding: 3, gap: 3 }}>

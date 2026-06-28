@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { setAdminSession } from "@/lib/session";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
 
 export async function POST(request: Request) {
@@ -34,16 +35,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nesprávny e-mail alebo heslo." }, { status: 401 });
     }
 
+    // Auto-promote Milan Ficek to superadmin in database if not already set
+    let finalRole = admin.role;
+    if (admin.email.trim().toLowerCase() === "milan@ficek.sk" && admin.role !== "superadmin") {
+      await db.admin.update({
+        where: { id: admin.id },
+        data: { role: "superadmin" }
+      });
+      finalRole = "superadmin";
+    }
+
     await setAdminSession({
       adminId: admin.id,
       email: admin.email,
       name: admin.name,
-      unitId: admin.unitId
+      unitId: admin.unitId,
+      role: finalRole
+    });
+
+    await createAuditLogEntry("USER_LOGIN", `user:${admin.email}`, {
+      message: `Používateľ ${admin.name} (${admin.email}) sa prihlásil s rolou ${finalRole}.`,
+      adminId: admin.id,
+      email: admin.email,
+      name: admin.name,
+      role: finalRole,
+      ip
     });
 
     return NextResponse.json({
       success: true,
-      user: { name: admin.name, email: admin.email, unitId: admin.unitId }
+      user: { name: admin.name, email: admin.email, unitId: admin.unitId, role: finalRole }
     });
   } catch (err) {
     console.error("Login API error:", err);

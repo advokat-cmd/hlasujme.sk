@@ -220,6 +220,7 @@ async function main() {
         email: adm.email,
         passwordHash: adm.isMilan ? milanHashedPw : hashedPw,
         name: adm.name,
+        role: adm.isMilan ? "superadmin" : "admin",
         unitId: linkedUnitId,
         ownerId: linkedOwnerId
       }

@@ -72,6 +72,16 @@ export default function CreatePollPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // Redirect owners/vlastníci if they try to access this page
+  React.useEffect(() => {
+    fetch("/api/admin/building", { method: "POST", body: JSON.stringify({}) })
+      .then((res) => {
+        if (res.status === 403) {
+          router.push("/admin");
+        }
+      });
+  }, [router]);
+
   const steps = ["Základné údaje", "Otázky a väčšina", "Oprávnené jednotky", "Kontrola a spustenie"];
   
   const [basics, setBasics] = useState({

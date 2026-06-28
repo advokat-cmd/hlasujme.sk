@@ -5,12 +5,16 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Ic } from "../ui/Icons";
 import { useNarrow } from "@/components/ui/LayoutHelpers";
+import { Modal } from "../ui/Modal";
+import { Btn } from "../ui/Button";
+import { FormRow, Input } from "../ui/FormControls";
 
 interface AdminSidebarProps {
   user: {
     name: string;
     email: string;
     unitId: string | null;
+    role: string;
   };
   activePollId: string | null;
 }
@@ -21,14 +25,62 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
   const narrow = useNarrow(860);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const pollLink = activePollId ? `/admin/poll/${activePollId}` : "/admin/poll/create";
+  // Password change states
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
+  const [changePasswordError, setChangePasswordError] = useState("");
 
-  const nav = [
-    { id: "dashboard", label: "Prehľad", icon: "dashboard", href: "/admin" },
-    { id: "poll-active", label: "Hlasovania (aktívne)", icon: "vote", href: "/admin/poll/active" },
-    { id: "poll-archive", label: "Hlasovania (archív)", icon: "archive", href: "/admin/poll/archive" },
-    { id: "register", label: "Dom a vlastníci", icon: "building", href: "/admin/register" },
-  ];
+  const handleChangePasswordSubmit = async () => {
+    if (!newPassword.trim()) {
+      setChangePasswordError("Prosím, zadajte nové heslo.");
+      return;
+    }
+    if (newPassword.trim().length < 6) {
+      setChangePasswordError("Heslo musí mať aspoň 6 znakov.");
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setChangePasswordError("Heslá sa nezhodujú.");
+      return;
+    }
+
+    setChangingPassword(true);
+    setChangePasswordError("");
+
+    try {
+      const res = await fetch("/api/auth/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setChangePasswordError(data.error || "Zmena hesla zlyhala.");
+      } else {
+        alert("Vaše heslo bolo úspešne zmenené.");
+        setChangePasswordOpen(false);
+        setNewPassword("");
+        setNewPasswordConfirm("");
+      }
+    } catch (err) {
+      setChangePasswordError("Chyba sieťového pripojenia.");
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const nav = user.role === "vlastnik"
+    ? [
+        { id: "dashboard", label: "Prehľad výsledkov", icon: "dashboard", href: "/admin" },
+      ]
+    : [
+        { id: "dashboard", label: "Prehľad", icon: "dashboard", href: "/admin" },
+        { id: "poll-active", label: "Hlasovania (aktívne)", icon: "vote", href: "/admin/poll/active" },
+        { id: "poll-archive", label: "Hlasovania (archív)", icon: "archive", href: "/admin/poll/archive" },
+        { id: "register", label: "Dom a vlastníci", icon: "building", href: "/admin/register" },
+      ];
 
   const handleLogout = async () => {
     try {
@@ -58,7 +110,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
     .slice(-2)
     .join("")
     .toUpperCase() || "A";
-  const roleLabel = user.unitId ? `Administrátor · byt č. ${user.unitId}` : "Administrátor";
+  const roleLabel = user.role === "superadmin"
+    ? "Superadmin"
+    : user.role === "admin"
+      ? (user.unitId ? `Administrátor · byt č. ${user.unitId}` : "Administrátor")
+      : `Vlastník · byt č. ${user.unitId || "—"}`;
 
   if (narrow) {
     return (
@@ -160,6 +216,33 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
                 paddingTop: 8,
               }}
             >
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setChangePasswordOpen(true);
+                }}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "10px 12px",
+                  borderRadius: 8,
+                  border: "none",
+                  cursor: "pointer",
+                  fontFamily: "inherit",
+                  fontSize: 14,
+                  fontWeight: 500,
+                  textAlign: "left",
+                  background: "transparent",
+                  color: "rgba(232,236,244,.72)",
+                  marginBottom: 4,
+                }}
+              >
+                <Ic name="key" size={17} style={{ color: "var(--accent)" }} />
+                Zmeniť heslo
+              </button>
+
               <button
                 onClick={() => {
                   setMenuOpen(false);
@@ -297,7 +380,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
             >
               {user.name}
             </div>
-            <div style={{ fontSize: 11, color: "rgba(232,236,244,.5)" }}>{roleLabel}</div>
+            <div style={{ fontSize: 11, color: "rgba(232,236,244,.5)", marginBottom: 2 }}>{roleLabel}</div>
+            <button
+              onClick={() => setChangePasswordOpen(true)}
+              style={{
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--accent)",
+                fontSize: "11px",
+                fontWeight: 600,
+                padding: 0,
+                display: "block",
+                textAlign: "left",
+                textDecoration: "underline",
+              }}
+            >
+              Zmeniť heslo
+            </button>
           </div>
           <button
             onClick={handleLogout}
@@ -316,6 +416,76 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
           </button>
         </div>
       </div>
+
+      {changePasswordOpen && (
+        <Modal
+          title="Zmena prihlasovacieho hesla"
+          subtitle="Zvoľte si nové bezpečné heslo pre Váš účet"
+          icon="key"
+          onClose={() => {
+            setChangePasswordOpen(false);
+            setNewPassword("");
+            setNewPasswordConfirm("");
+            setChangePasswordError("");
+          }}
+          width={450}
+          footer={
+            <>
+              <Btn
+                kind="secondary"
+                onClick={() => {
+                  setChangePasswordOpen(false);
+                  setNewPassword("");
+                  setNewPasswordConfirm("");
+                  setChangePasswordError("");
+                }}
+                disabled={changingPassword}
+              >
+                Zrušiť
+              </Btn>
+              <Btn
+                kind="primary"
+                icon="check"
+                onClick={handleChangePasswordSubmit}
+                disabled={changingPassword}
+              >
+                {changingPassword ? "Ukladám..." : "Uložiť nové heslo"}
+              </Btn>
+            </>
+          }
+        >
+          {changePasswordError && (
+            <div style={{ color: "var(--disagree)", display: "flex", alignItems: "center", gap: 6, fontSize: "13px", marginBottom: 15 }}>
+              <Ic name="alert" size={16} />
+              {changePasswordError}
+            </div>
+          )}
+
+          <FormRow label="Nové heslo" hint="Heslo musí mať aspoň 6 znakov.">
+            <Input
+              type="password"
+              placeholder="Zadajte nové heslo"
+              value={newPassword}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                setChangePasswordError("");
+              }}
+            />
+          </FormRow>
+
+          <FormRow label="Potvrdenie nového hesla">
+            <Input
+              type="password"
+              placeholder="Zopakujte nové heslo"
+              value={newPasswordConfirm}
+              onChange={(e) => {
+                setNewPasswordConfirm(e.target.value);
+                setChangePasswordError("");
+              }}
+            />
+          </FormRow>
+        </Modal>
+      )}
     </aside>
   );
 };

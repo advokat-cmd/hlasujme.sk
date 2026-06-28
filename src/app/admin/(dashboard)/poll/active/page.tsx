@@ -8,9 +8,15 @@ import { Card } from "@/components/ui/Card";
 import { Btn } from "@/components/ui/Button";
 import { Ic } from "@/components/ui/Icons";
 
+import { getAdminSession } from "@/lib/session";
+
 export const revalidate = 0;
 
 export default async function ActivePollPage() {
+  const session = await getAdminSession();
+  if (!session) redirect("/admin/login");
+  if (session.role === "vlastnik") redirect("/admin");
+
   const building = await db.building.findFirst();
   if (!building) redirect("/admin");
 

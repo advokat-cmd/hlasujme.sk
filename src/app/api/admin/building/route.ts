@@ -7,8 +7,8 @@ import { revalidatePath } from "next/cache";
 export async function POST(request: Request) {
   try {
     const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const body = await request.json();

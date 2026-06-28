@@ -11,8 +11,8 @@ export async function PUT(
 ) {
   try {
     const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const { id: unitId } = await params;
@@ -109,37 +109,41 @@ export async function PUT(
 
         updatedOwners.push(dbOwner);
 
-        // Update/create Admin user if marked
-        if (o.admin) {
-          const loginEmail = (o.email || email).trim().toLowerCase();
-          if (loginEmail) {
-            const adminData: any = {
-              name: ownerName,
-              email: loginEmail,
-              unitId: unit.id,
-              ownerId: dbOwner.id
-            };
-            if (o.password) {
-              adminData.passwordHash = await argon2.hash(o.password, { type: argon2.argon2id });
-            }
+        // Check if there is an existing Admin record for this owner
+        const existingAdmin = await tx.admin.findFirst({
+          where: { ownerId: dbOwner.id }
+        });
 
-            await tx.admin.upsert({
-              where: { email: loginEmail },
-              update: adminData,
-              create: {
-                ...adminData,
-                passwordHash: adminData.passwordHash || (await argon2.hash("demo1234", { type: argon2.argon2id }))
-              }
-            });
+        const loginEmail = o.email?.trim().toLowerCase();
+        
+        if (loginEmail && (o.admin || o.password || existingAdmin)) {
+          // Determine the role
+          const role = o.admin 
+            ? "admin" 
+            : (existingAdmin?.role === "superadmin" ? "superadmin" : "vlastnik");
+
+          const adminData: any = {
+            name: ownerName,
+            email: loginEmail,
+            unitId: unit.id,
+            ownerId: dbOwner.id,
+            role: role
+          };
+          if (o.password) {
+            adminData.passwordHash = await argon2.hash(o.password, { type: argon2.argon2id });
           }
-        } else {
-          // If was admin, remove admin rights (delete admin record linked to this owner)
-          const adminRecord = await tx.admin.findFirst({
-            where: { ownerId: dbOwner.id }
+
+          await tx.admin.upsert({
+            where: { email: loginEmail },
+            update: adminData,
+            create: {
+              ...adminData,
+              passwordHash: adminData.passwordHash || (await argon2.hash("demo1234", { type: argon2.argon2id }))
+            }
           });
-          if (adminRecord) {
-            await tx.admin.delete({ where: { id: adminRecord.id } });
-          }
+        } else if (existingAdmin) {
+          // If the email is cleared, delete the admin record
+          await tx.admin.delete({ where: { id: existingAdmin.id } });
         }
       }
 

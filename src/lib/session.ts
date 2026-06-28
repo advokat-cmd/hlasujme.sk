@@ -66,6 +66,7 @@ export interface AdminSession {
   email: string;
   name: string;
   unitId: string | null;
+  role: string;
 }
 
 export async function getAdminSession(): Promise<AdminSession | null> {
