@@ -69,6 +69,51 @@ export default async function VoterPage({ params }: PageProps) {
 
   const { poll, unit, owner } = tokenInfo;
 
+  // Check if poll has not started yet
+  const now = new Date();
+  if (poll.startAt > now) {
+    return (
+      <div
+        style={{
+          height: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24,
+          background: "radial-gradient(circle at 50% 0%, color-mix(in srgb, var(--primary) 9%, var(--paper-2)), var(--paper-2))",
+        }}
+      >
+        <Card style={{ width: 440, maxWidth: "100%", textAlign: "center" }}>
+          <div
+            style={{
+              width: 56,
+              height: 56,
+              borderRadius: 999,
+              background: "var(--primary-bg)",
+              color: "var(--primary)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+            }}
+          >
+            <Ic name="clock" size={28} />
+          </div>
+          <h1 style={{ fontFamily: "var(--serif)", fontSize: 20, fontWeight: 600, margin: "0 0 8px" }}>
+            Hlasovanie sa ešte nezačalo
+          </h1>
+          <p style={{ fontSize: 13.5, color: "var(--ink-soft)", margin: "0 0 16px", lineHeight: 1.5 }}>
+            Toto elektronické hlasovanie je naplánované a bude prístupné od:<br/>
+            <strong>{formatSlovakDate(poll.startAt)}</strong>
+          </p>
+          <p style={{ fontSize: 12, color: "var(--ink-faint)", margin: 0 }}>
+            Po tomto čase stačí túto stránku obnoviť a budete môcť odovzdať svoj hlas.
+          </p>
+        </Card>
+      </div>
+    );
+  }
+
   // 2. Fetch building info
   const building = await db.building.findUnique({
     where: { id: unit.buildingId },

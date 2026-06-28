@@ -60,6 +60,7 @@ export default async function AdminPollDetailPage({
   // 5. Fetch Votes and Subvotes to build Unit Votes list
   const votes = await db.vote.findMany({ where: { pollId } });
   const subvotes = await db.coownerSubvote.findMany({ where: { pollId } });
+  const voteTokens = await db.voteToken.findMany({ where: { pollId } });
 
   const votedUnitIds = new Set([
     ...votes.map(v => v.unitId),
@@ -107,9 +108,25 @@ export default async function AdminPollDetailPage({
       ? u.actingPerson 
       : (u.owners.map(o => o.name).join(", ") || "Vlastník");
 
+    const uTokens = voteTokens.filter(vt => vt.unitId === u.id);
+
     const recipients = u.coMode === "internal"
-      ? u.owners.map(o => ({ name: o.name, email: o.email }))
-      : [{ name: ownerName, email: u.email }];
+      ? u.owners.map(o => {
+          const t = uTokens.find(vt => vt.ownerId === o.id);
+          return {
+            name: o.name,
+            email: o.email,
+            sentAt: t ? t.createdAt.toISOString() : null
+          };
+        })
+      : (() => {
+          const t = uTokens.find(vt => vt.ownerId === null);
+          return [{
+            name: ownerName,
+            email: u.email,
+            sentAt: t ? t.createdAt.toISOString() : null
+          }];
+        })();
 
     unitVotesList.push({
       unitId: u.id,

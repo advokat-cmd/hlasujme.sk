@@ -124,8 +124,8 @@ export async function validateVoteToken(plainToken: string) {
     return null;
   }
 
-  // Verify currently within poll time window
-  if (poll.startAt > now || poll.endAt < now) {
+  // Verify currently has not ended
+  if (poll.endAt < now) {
     return null;
   }
 
