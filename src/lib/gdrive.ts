@@ -144,3 +144,49 @@ export async function listFilesInFolder(
     return [];
   }
 }
+
+/**
+ * Retrieves file metadata (name, mimeType) from Google Drive.
+ */
+export async function getFileMetadata(fileId: string): Promise<{ name: string; mimeType: string } | null> {
+  try {
+    const drive = getDriveClient();
+    if (!drive) return null;
+    const res = await drive.files.get({
+      fileId,
+      fields: "name, mimeType",
+    });
+    return {
+      name: res.data.name || "file",
+      mimeType: res.data.mimeType || "application/octet-stream",
+    };
+  } catch (err) {
+    console.error("Error fetching file metadata from Google Drive:", err);
+    return null;
+  }
+}
+
+/**
+ * Downloads a file from Google Drive by its file ID.
+ * @param fileId Google Drive file ID
+ */
+export async function downloadFileFromDrive(fileId: string): Promise<Buffer | null> {
+  try {
+    const drive = getDriveClient();
+    if (!drive) {
+      console.warn("Google Drive client not configured.");
+      return null;
+    }
+
+    const res = await drive.files.get(
+      { fileId, alt: "media" },
+      { responseType: "arraybuffer" }
+    );
+
+    return Buffer.from(res.data as ArrayBuffer);
+  } catch (err) {
+    console.error("Error downloading file from Google Drive:", err);
+    return null;
+  }
+}
+

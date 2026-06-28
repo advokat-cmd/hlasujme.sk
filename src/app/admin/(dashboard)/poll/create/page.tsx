@@ -161,7 +161,7 @@ export default function CreatePollPage() {
           }
         }
 
-        router.push(`/admin/poll/${pollId}`);
+        router.push(`/admin/poll/${pollId}?tab=emails`);
         router.refresh();
       }
     } catch (err) {
@@ -482,18 +482,19 @@ export default function CreatePollPage() {
                             display: "inline-flex",
                             alignItems: "center",
                             gap: 8,
-                            padding: "8px 14px",
+                            padding: "9px 15px",
                             borderRadius: 9,
-                            border: "1px dashed var(--line)",
-                            background: "var(--surface)",
+                            border: "1.5px solid var(--primary)",
+                            background: "var(--primary-bg)",
                             cursor: "pointer",
                             fontSize: "13px",
                             fontWeight: 600,
                             color: "var(--primary)",
+                            transition: "background .15s, filter .15s",
                           }}
                         >
                           <Ic name="upload" size={15} />
-                          {q.file ? "Zmeniť dokument" : "Vybrať dokument"}
+                          {q.file ? "Zmeniť dokument" : "Nahrať dokument k hlasovaniu"}
                         </label>
                         {q.file && (
                           <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "12.5px", color: "var(--ink-soft)" }}>

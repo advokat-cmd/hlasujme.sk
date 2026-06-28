@@ -27,22 +27,27 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
 
   // Password change states
   const [changePasswordOpen, setChangePasswordOpen] = useState(false);
+  const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [changePasswordError, setChangePasswordError] = useState("");
 
   const handleChangePasswordSubmit = async () => {
+    if (!oldPassword) {
+      setChangePasswordError("Prosím, zadajte staré heslo.");
+      return;
+    }
     if (!newPassword.trim()) {
       setChangePasswordError("Prosím, zadajte nové heslo.");
       return;
     }
     if (newPassword.trim().length < 6) {
-      setChangePasswordError("Heslo musí mať aspoň 6 znakov.");
+      setChangePasswordError("Nové heslo musí mať aspoň 6 znakov.");
       return;
     }
     if (newPassword !== newPasswordConfirm) {
-      setChangePasswordError("Heslá sa nezhodujú.");
+      setChangePasswordError("Nové heslá sa nezhodujú.");
       return;
     }
 
@@ -53,7 +58,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
       const res = await fetch("/api/auth/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ newPassword }),
+        body: JSON.stringify({ oldPassword, newPassword }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -61,6 +66,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
       } else {
         alert("Vaše heslo bolo úspešne zmenené.");
         setChangePasswordOpen(false);
+        setOldPassword("");
         setNewPassword("");
         setNewPasswordConfirm("");
       }
@@ -426,6 +432,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
           icon="key"
           onClose={() => {
             setChangePasswordOpen(false);
+            setOldPassword("");
             setNewPassword("");
             setNewPasswordConfirm("");
             setChangePasswordError("");
@@ -437,6 +444,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
                 kind="secondary"
                 onClick={() => {
                   setChangePasswordOpen(false);
+                  setOldPassword("");
                   setNewPassword("");
                   setNewPasswordConfirm("");
                   setChangePasswordError("");
@@ -462,6 +470,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
               {changePasswordError}
             </div>
           )}
+
+          <FormRow label="Staré heslo">
+            <Input
+              type="password"
+              placeholder="Zadajte staré heslo"
+              value={oldPassword}
+              onChange={(e) => {
+                setOldPassword(e.target.value);
+                setChangePasswordError("");
+              }}
+            />
+          </FormRow>
 
           <FormRow label="Nové heslo" hint="Heslo musí mať aspoň 6 znakov.">
             <Input

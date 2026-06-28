@@ -11,9 +11,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Neprihlásený používateľ." }, { status: 401 });
     }
 
-    const { newPassword } = await request.json();
+    const { oldPassword, newPassword } = await request.json();
+    if (!oldPassword) {
+      return NextResponse.json({ error: "Staré heslo je povinné." }, { status: 400 });
+    }
     if (!newPassword || newPassword.trim().length < 6) {
-      return NextResponse.json({ error: "Heslo musí mať aspoň 6 znakov." }, { status: 400 });
+      return NextResponse.json({ error: "Nové heslo musí mať aspoň 6 znakov." }, { status: 400 });
     }
 
     const admin = await db.admin.findUnique({
@@ -22,6 +25,12 @@ export async function POST(request: Request) {
 
     if (!admin) {
       return NextResponse.json({ error: "Používateľ nebol nájdený." }, { status: 404 });
+    }
+
+    // Overenie starého hesla
+    const isOldPasswordValid = await argon2.verify(admin.passwordHash, oldPassword);
+    if (!isOldPasswordValid) {
+      return NextResponse.json({ error: "Zadané staré heslo je nesprávne." }, { status: 400 });
     }
 
     const passwordHash = await argon2.hash(newPassword.trim(), {

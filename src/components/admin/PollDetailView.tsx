@@ -13,6 +13,12 @@ import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { VOTE_STYLE } from "../ui/Pill";
 import { CloseModal } from "./CloseModal";
 
+const extractDriveFileId = (url: string): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+};
+
 interface PollDetailViewProps {
   poll: {
     id: string;
@@ -86,6 +92,26 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const router = useRouter();
   const isMobile = useNarrow(600);
   const [tab, setTab] = useState("results");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const queryTab = params.get("tab");
+      if (queryTab && ["results", "units", "emails", "protocol", "documents"].includes(queryTab)) {
+        setTab(queryTab);
+      }
+    }
+  }, []);
+
+  const handleTabChange = (newTab: string) => {
+    setTab(newTab);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", newTab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
+
   const [closing, setClosing] = useState(false);
   const [filter, setFilter] = useState("all");
   const [expandedEmailCard, setExpandedEmailCard] = useState<number | null>(null);
@@ -290,7 +316,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
             key={t.id}
             role="tab"
             aria-selected={tab === t.id}
-            onClick={() => setTab(t.id)}
+            onClick={() => handleTabChange(t.id)}
             style={{
               display: "flex",
               alignItems: "center",
@@ -397,28 +423,34 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         </p>
                         {q.attachments && q.attachments.length > 0 && (
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                            {q.attachments.map((url, uIdx) => (
-                              <a
-                                key={uIdx}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  fontSize: "12px",
-                                  color: "var(--primary)",
-                                  textDecoration: "none",
-                                  fontWeight: 600,
-                                  background: "var(--primary-bg)",
-                                  padding: "4px 10px",
-                                  borderRadius: 6,
-                                }}
-                              >
-                                <Ic name="doc" size={13} /> Podkladový dokument
-                              </a>
-                            ))}
+                            {q.attachments.map((url, uIdx) => {
+                              const fileInfo = files.find(f => f.webViewLink === url);
+                              const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
+                              const href = fileId ? `/api/file/${fileId}` : url;
+                              const displayName = fileInfo ? fileInfo.name : "Podkladový dokument";
+                              return (
+                                <a
+                                  key={uIdx}
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    fontSize: "12px",
+                                    color: "var(--primary)",
+                                    textDecoration: "none",
+                                    fontWeight: 600,
+                                    background: "var(--primary-bg)",
+                                    padding: "4px 10px",
+                                    borderRadius: 6,
+                                  }}
+                                >
+                                  <Ic name="doc" size={13} /> {displayName}
+                                </a>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -460,28 +492,34 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         </p>
                         {q.attachments && q.attachments.length > 0 && (
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                            {q.attachments.map((url, uIdx) => (
-                              <a
-                                key={uIdx}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                style={{
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: 5,
-                                  fontSize: "12.5px",
-                                  color: "var(--primary)",
-                                  textDecoration: "none",
-                                  fontWeight: 600,
-                                  background: "var(--primary-bg)",
-                                  padding: "5px 12px",
-                                  borderRadius: 8,
-                                }}
-                              >
-                                <Ic name="doc" size={14} /> Podkladový dokument (Google Drive)
-                              </a>
-                            ))}
+                            {q.attachments.map((url, uIdx) => {
+                              const fileInfo = files.find(f => f.webViewLink === url);
+                              const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
+                              const href = fileId ? `/api/file/${fileId}` : url;
+                              const displayName = fileInfo ? fileInfo.name : "Podkladový dokument (Google Drive)";
+                              return (
+                                <a
+                                  key={uIdx}
+                                  href={href}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: 5,
+                                    fontSize: "12.5px",
+                                    color: "var(--primary)",
+                                    textDecoration: "none",
+                                    fontWeight: 600,
+                                    background: "var(--primary-bg)",
+                                    padding: "5px 12px",
+                                    borderRadius: 8,
+                                  }}
+                                >
+                                  <Ic name="doc" size={14} /> {displayName}
+                                </a>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
@@ -573,24 +611,49 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     <span style={{ fontSize: "11.5px", fontWeight: 600, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4 }}>
                       Prílohy
                     </span>
-                    {q.attachments.map((a, i) => (
-                      <span
-                        key={i}
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: 6,
-                          fontSize: "12.5px",
-                          color: "var(--primary)",
-                          background: "var(--surface)",
-                          border: "1px solid var(--line)",
-                          borderRadius: 7,
-                          padding: "5px 10px",
-                        }}
-                      >
-                        <Ic name="doc" size={14} /> {a}
-                      </span>
-                    ))}
+                    {q.attachments.map((a, i) => {
+                      const fileInfo = files.find(f => f.name === a || f.webViewLink === a);
+                      const fileId = fileInfo ? fileInfo.id : (a.startsWith("http") ? extractDriveFileId(a) : null);
+                      const href = fileId ? `/api/file/${fileId}` : "#";
+                      const displayName = fileInfo ? fileInfo.name : a;
+
+                      return (
+                        <a
+                          key={i}
+                          href={href}
+                          target={href !== "#" ? "_blank" : undefined}
+                          rel={href !== "#" ? "noopener noreferrer" : undefined}
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: 6,
+                            fontSize: "12.5px",
+                            color: "var(--primary)",
+                            background: "var(--surface)",
+                            border: "1px solid var(--line)",
+                            borderRadius: 7,
+                            padding: "5px 10px",
+                            textDecoration: "none",
+                            cursor: href !== "#" ? "pointer" : "default",
+                            transition: "background .15s, border-color .15s",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (href !== "#") {
+                              e.currentTarget.style.background = "var(--primary-bg)";
+                              e.currentTarget.style.borderColor = "var(--primary)";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (href !== "#") {
+                              e.currentTarget.style.background = "var(--surface)";
+                              e.currentTarget.style.borderColor = "var(--line)";
+                            }
+                          }}
+                        >
+                          <Ic name="doc" size={14} /> {displayName}
+                        </a>
+                      );
+                    })}
                   </div>
                 )}
               </Card>
@@ -732,6 +795,31 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 n: emailStats.eligibleEmailsCount,
                 s: "sent",
                 icon: "send",
+                subject: `Pozvánka na hlasovanie: ${poll.title}`,
+                body: (
+                  <div>
+                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+                    <p>v bytovom dome <strong>Björnsonova 3</strong> bolo vyhlásené elektronické hlasovanie:</p>
+                    
+                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+                      <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Dôvod:</strong> {poll.reason}</p>
+                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Termín na hlasovanie:</strong> do {formattedEnd}</p>
+                    </div>
+
+                    <p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link):</p>
+                    
+                    <div style={{ textAlign: "center", margin: "20px 0" }}>
+                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+                        👉 HLASOVAŤ ELEKTRONICKY
+                      </span>
+                    </div>
+
+                    <p style={{ fontSize: "11px", color: "var(--ink-soft)", lineHeight: "1.4" }}>
+                      Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť.
+                    </p>
+                  </div>
+                ),
               },
               {
                 t: "Pripomienka (48 h pred koncom)",
@@ -739,6 +827,26 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 n: emailStats.unvotedEmailsCount,
                 s: "scheduled",
                 icon: "clock",
+                subject: `UPOZORNENIE: Pripomienka k hlasovaniu: ${poll.title}`,
+                body: (
+                  <div>
+                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+                    <p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>Björnsonova 3</strong>, ktoré končí o 48 hodín:</p>
+                    
+                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Koniec hlasovania:</strong> do {formattedEnd}</p>
+                    </div>
+
+                    <p>Ak ste doteraz neodovzdali svoj hlas, môžete tak urobiť kliknutím na odkaz nižšie:</p>
+                    
+                    <div style={{ textAlign: "center", margin: "20px 0" }}>
+                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+                        👉 HLASOVAŤ ELEKTRONICKY
+                      </span>
+                    </div>
+                  </div>
+                ),
               },
               {
                 t: "Potvrdenie prijatia hlasu",
@@ -746,6 +854,30 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 n: emailStats.votedCount,
                 s: "auto",
                 icon: "checkCircle",
+                subject: `Potvrdenie o hlasovaní: ${poll.title}`,
+                body: (
+                  <div>
+                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+                    <p>potvrdzujeme prijatie Vášho hlasu za byt/NP <strong>č. [Číslo bytu]</strong> v hlasovaní:</p>
+
+                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+                      <h4 style={{ margin: "0 0 10px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+                      <p style={{ color: "var(--ink-soft)", fontSize: "12px", margin: "0 0 8px" }}>Prijaté dňa: [Dátum a čas odovzdania]</p>
+                      <ul style={{ paddingLeft: "20px", margin: 0, fontSize: "12.5px" }}>
+                        <li style={{ marginBottom: "6px" }}>
+                          <strong>Otázka 1:</strong> [Text prvej otázky...] <br/>
+                          Odpoveď: <span style={{ fontWeight: "bold", color: "var(--agree)" }}>Súhlasím</span>
+                        </li>
+                        <li>
+                          <strong>Otázka 2:</strong> [Text druhej otázky...] <br/>
+                          Odpoveď: <span style={{ fontWeight: "bold", color: "var(--disagree)" }}>Nesúhlasím</span>
+                        </li>
+                      </ul>
+                    </div>
+
+                    <p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu.</p>
+                  </div>
+                ),
               },
               {
                 t: "Výsledok hlasovania",
@@ -753,6 +885,27 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 n: emailStats.eligibleEmailsCount,
                 s: poll.status === "closed" ? "sent" : "pending",
                 icon: "paper",
+                subject: `Výsledky hlasovania: ${poll.title}`,
+                body: (
+                  <div>
+                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+                    <p>oznamujeme Vám, že elektronické hlasovanie bolo ukončené a výsledky boli oficiálne zapečatené:</p>
+
+                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+                      <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Stav:</strong> Uzavreté a overené</p>
+                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Zápisnica (PDF):</strong> Súbor priložený v e-maile</p>
+                    </div>
+
+                    <p>Kompletnú zápisnicu o priebehu a výsledkoch si môžete stiahnuť aj priamo kliknutím na odkaz nižšie:</p>
+                    
+                    <div style={{ textAlign: "center", margin: "20px 0" }}>
+                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+                        Stiahnuť zápisnicu (PDF)
+                      </span>
+                    </div>
+                  </div>
+                ),
               },
             ].map((m, i) => {
               const sTone: Record<string, string> = { sent: "success", scheduled: "primary", auto: "neutral", pending: "neutral" };
@@ -823,136 +976,175 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
                   {isExpanded && (
                     <div style={{ padding: "12px 18px 18px", borderTop: "1px solid var(--line)", background: "var(--paper-2)" }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10, paddingLeft: isMobile ? 0 : 52 }}>
-                        Zoznam príjemcov a stav doručenia
-                      </div>
+                      <div
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr",
+                          gap: 24,
+                          paddingLeft: isMobile ? 0 : 52,
+                        }}
+                      >
+                        {/* Ľavý stĺpec: Zoznam príjemcov */}
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
+                            Zoznam príjemcov a stav doručenia
+                          </div>
+                          
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingRight: 8 }}>
+                            {i === 0 && (() => {
+                              const list = unitVotesList.flatMap(u =>
+                                u.recipients.map(r => ({
+                                  name: r.name,
+                                  email: r.email,
+                                  unitNo: u.unitNo,
+                                }))
+                              );
+                              return list.map((item, idx) => (
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                  <span style={{ minWidth: 200 }}>
+                                    <strong>{item.name}</strong>{" "}
+                                    <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                                  </span>
+                                  {item.email ? (
+                                    <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Odoslané {formatDateStr(poll.announcedAt)}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Neodoslané (chyba kontaktu)
+                                    </span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingLeft: isMobile ? 0 : 52 }}>
-                        {i === 0 && (() => {
-                          const list = unitVotesList.flatMap(u =>
-                            u.recipients.map(r => ({
-                              name: r.name,
-                              email: r.email,
-                              unitNo: u.unitNo,
-                            }))
-                          );
-                          return list.map((item, idx) => (
-                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
-                              <span style={{ minWidth: 200 }}>
-                                <strong>{item.name}</strong>{" "}
-                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
-                              </span>
-                              {item.email ? (
-                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Odoslané {formatDateStr(poll.announcedAt)}
-                                </span>
-                              ) : (
-                                <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Neodoslané (chyba kontaktu)
-                                </span>
-                              )}
-                            </div>
-                          ));
-                        })()}
+                            {i === 1 && (() => {
+                              const list = unitVotesList
+                                .filter(u => !u.voted)
+                                .flatMap(u =>
+                                  u.recipients.map(r => ({
+                                    name: r.name,
+                                    email: r.email,
+                                    unitNo: u.unitNo,
+                                  }))
+                                );
+                              if (list.length === 0) {
+                                  return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Všetci vlastníci už zahlasovali. Žiadne pripomienky nie sú plánované.</div>;
+                              }
+                              return list.map((item, idx) => (
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                  <span style={{ minWidth: 200 }}>
+                                    <strong>{item.name}</strong>{" "}
+                                    <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                                  </span>
+                                  {item.email ? (
+                                    <span style={{ color: "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Naplánované (48 h pred koncom)
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Preskočené (chyba kontaktu)
+                                    </span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
 
-                        {i === 1 && (() => {
-                          const list = unitVotesList
-                            .filter(u => !u.voted)
-                            .flatMap(u =>
-                              u.recipients.map(r => ({
-                                name: r.name,
-                                email: r.email,
-                                unitNo: u.unitNo,
-                              }))
-                            );
-                          if (list.length === 0) {
-                            return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Všetci vlastníci už zahlasovali. Žiadne pripomienky nie sú plánované.</div>;
-                          }
-                          return list.map((item, idx) => (
-                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
-                              <span style={{ minWidth: 200 }}>
-                                <strong>{item.name}</strong>{" "}
-                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
-                              </span>
-                              {item.email ? (
-                                <span style={{ color: "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Naplánované (48 h pred koncom)
-                                </span>
-                              ) : (
-                                <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Preskočené (chyba kontaktu)
-                                </span>
-                              )}
-                            </div>
-                          ));
-                        })()}
+                            {i === 2 && (() => {
+                              const list = unitVotesList
+                                .filter(u => u.voted && u.at)
+                                .flatMap(u =>
+                                  u.recipients.map(r => ({
+                                    name: r.name,
+                                    email: r.email,
+                                    unitNo: u.unitNo,
+                                    votedAt: u.at!,
+                                  }))
+                                );
+                              if (list.length === 0) {
+                                return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Zatiaľ neboli odovzdané žiadne hlasy.</div>;
+                              }
+                              return list.map((item, idx) => (
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                  <span style={{ minWidth: 200 }}>
+                                    <strong>{item.name}</strong>{" "}
+                                    <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                                  </span>
+                                  {item.email ? (
+                                    <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Potvrdené {formatDateStr(item.votedAt)}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Odoslané na email jednotky
+                                    </span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
 
-                        {i === 2 && (() => {
-                          const list = unitVotesList
-                            .filter(u => u.voted && u.at)
-                            .flatMap(u =>
-                              u.recipients.map(r => ({
-                                name: r.name,
-                                email: r.email,
-                                unitNo: u.unitNo,
-                                votedAt: u.at!,
-                              }))
-                            );
-                          if (list.length === 0) {
-                            return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Zatiaľ neboli odovzdané žiadne hlasy.</div>;
-                          }
-                          return list.map((item, idx) => (
-                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
-                              <span style={{ minWidth: 200 }}>
-                                <strong>{item.name}</strong>{" "}
-                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
-                              </span>
-                              {item.email ? (
-                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Potvrdené {formatDateStr(item.votedAt)}
-                                </span>
-                              ) : (
-                                <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Odoslané na email jednotky
-                                </span>
-                              )}
-                            </div>
-                          ));
-                        })()}
+                            {i === 3 && (() => {
+                              const list = unitVotesList.flatMap(u =>
+                                u.recipients.map(r => ({
+                                  name: r.name,
+                                  email: r.email,
+                                  unitNo: u.unitNo,
+                                }))
+                              );
+                              if (poll.status !== "closed") {
+                                return (
+                                  <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
+                                    Výsledky budú automaticky odoslané všetkým {list.filter(item => item.email).length} príjemcom po overení a uzavretí hlasovania.
+                                  </div>
+                                );
+                              }
+                              return list.map((item, idx) => (
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                  <span style={{ minWidth: 200 }}>
+                                    <strong>{item.name}</strong>{" "}
+                                    <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
+                                  </span>
+                                  {item.email ? (
+                                    <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Odoslané {formatDateStr(poll.sealedResult ? poll.endAt : poll.endAt)}
+                                    </span>
+                                  ) : (
+                                    <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                      Neodoslané (chyba kontaktu)
+                                    </span>
+                                  )}
+                                </div>
+                              ));
+                            })()}
+                          </div>
+                        </div>
 
-                        {i === 3 && (() => {
-                          const list = unitVotesList.flatMap(u =>
-                            u.recipients.map(r => ({
-                              name: r.name,
-                              email: r.email,
-                              unitNo: u.unitNo,
-                            }))
-                          );
-                          if (poll.status !== "closed") {
-                            return (
-                              <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-                                Výsledky budú automaticky odoslané všetkým {list.filter(item => item.email).length} príjemcom po overení a uzavretí hlasovania.
-                              </div>
-                            );
-                          }
-                          return list.map((item, idx) => (
-                            <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
-                              <span style={{ minWidth: 200 }}>
-                                <strong>{item.name}</strong>{" "}
-                                <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
-                              </span>
-                              {item.email ? (
-                                <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Odoslané {formatDateStr(poll.sealedResult ? poll.endAt : poll.endAt)}
-                                </span>
-                              ) : (
-                                <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                  Neodoslané (chyba kontaktu)
-                                </span>
-                              )}
+                        {/* Pravý stĺpec: Náhľad textu e-mailu */}
+                        <div style={{ display: "flex", flexDirection: "column" }}>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
+                            Znenie e-mailu (vzor)
+                          </div>
+                          
+                          <div
+                            style={{
+                              background: "var(--surface)",
+                              border: "1px solid var(--line)",
+                              borderRadius: 8,
+                              padding: "14px 16px",
+                              fontSize: 13,
+                              lineHeight: 1.5,
+                              color: "var(--ink)",
+                              maxHeight: 300,
+                              overflowY: "auto",
+                            }}
+                          >
+                            <div style={{ borderBottom: "1px solid var(--line)", paddingBottom: 8, marginBottom: 12, fontSize: 12, color: "var(--ink-soft)", lineHeight: 1.45 }}>
+                              <strong>Odosielateľ:</strong> info@hlasujme.sk<br/>
+                              <strong>Predmet:</strong> {m.subject}
                             </div>
-                          ));
-                        })()}
+                            {m.body}
+                          </div>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -1055,14 +1247,8 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     Hlasovanie bolo uzavreté a výsledky sú zapečatené
                   </h3>
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
-                    Zápisnica v PDF bola úspešne vygenerovaná, časovo opečiatkovaná a kryptograficky zapečatená. Archív
-                    je odteraz nemenný.
+                    Zápisnica bola úspešne vygenerovaná a odoslaná každému vlastníkovi mailom (ako link na stiahnutie).
                   </p>
-                  {poll.sealedResult && (
-                    <div style={{ marginTop: 12, fontSize: 12, fontFamily: "monospace", color: "var(--ink-soft)" }}>
-                      SHA-256 seal: {poll.sealedResult.sha256}
-                    </div>
-                  )}
                 </div>
                 {poll.sealedResult && (
                   <a href={`/api/sealed/${poll.id}/pdf`} style={{ textDecoration: "none" }}>
@@ -1259,7 +1445,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           onClose={() => setClosing(false)}
           onSuccess={() => {
             setClosing(false);
-            setTab("protocol");
+            handleTabChange("protocol");
             router.refresh();
           }}
         />

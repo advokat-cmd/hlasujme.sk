@@ -8,6 +8,12 @@ import { Card } from "@/components/ui/Card";
 import { Ic } from "@/components/ui/Icons";
 import { VoteAnswer } from "@prisma/client";
 
+const extractDriveFileId = (url: string): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+  return match ? match[1] : null;
+};
+
 interface Question {
   id: string;
   no: number;
@@ -582,33 +588,37 @@ function VVote({
 
         {q.attachments && q.attachments.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
-            {q.attachments.map((a, i) => (
-              <a
-                key={i}
-                href={a}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 9,
-                  padding: "10px 12px",
-                  borderRadius: 9,
-                  background: "var(--v-card)",
-                  border: "1px solid var(--v-line)",
-                  fontSize: 12.5,
-                  textDecoration: "none",
-                  color: "var(--ink)",
-                  fontWeight: 500,
-                }}
-              >
-                <Ic name="doc" size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
-                <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  Otvoriť prílohu k otázke č. {q.no}
-                </span>
-                <Ic name="download" size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
-              </a>
-            ))}
+            {q.attachments.map((a, i) => {
+              const fileId = extractDriveFileId(a);
+              const href = fileId ? `/api/file/${fileId}` : a;
+              return (
+                <a
+                  key={i}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 9,
+                    padding: "10px 12px",
+                    borderRadius: 9,
+                    background: "var(--v-card)",
+                    border: "1px solid var(--v-line)",
+                    fontSize: 12.5,
+                    textDecoration: "none",
+                    color: "var(--ink)",
+                    fontWeight: 500,
+                  }}
+                >
+                  <Ic name="doc" size={16} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                  <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    Otvoriť prílohu k otázke č. {q.no}
+                  </span>
+                  <Ic name="download" size={15} style={{ color: "var(--primary)", flexShrink: 0 }} />
+                </a>
+              );
+            })}
           </div>
         )}
 

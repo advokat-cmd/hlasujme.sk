@@ -3,16 +3,17 @@ import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import fs from "fs";
 import path from "path";
+import { listFilesInFolder, downloadFileFromDrive } from "@/lib/gdrive";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ pollId: string }> }
 ) {
   try {
-    // 1. Verify admin is signed in
+    // 1. Verify user is signed in (admin or owner/vlastnik)
     const session = await getAdminSession();
     if (!session) {
-      return NextResponse.json({ error: "Neprihlásený administrátor." }, { status: 401 });
+      return NextResponse.json({ error: "Neprihlásený používateľ." }, { status: 401 });
     }
 
     const { pollId } = await params;
@@ -31,15 +32,30 @@ export async function GET(
     const fileName = path.basename(sealedResult.pdfPath);
     const absolutePath = path.join(process.cwd(), "storage", "sealed", fileName);
 
-    if (!fs.existsSync(absolutePath)) {
-      return NextResponse.json({ error: "Súbor zápisnice nebol nájdený na serveri." }, { status: 404 });
+    let fileBuffer: Buffer | null = null;
+
+    if (fs.existsSync(absolutePath)) {
+      fileBuffer = fs.readFileSync(absolutePath);
+    } else {
+      // Fallback: download from Google Drive if available
+      const poll = await db.poll.findUnique({
+        where: { id: pollId }
+      });
+      if (poll?.driveFolderId) {
+        const files = await listFilesInFolder(poll.driveFolderId);
+        const pdfFile = files.find(f => f.name.endsWith("_zapisnica.pdf"));
+        if (pdfFile) {
+          fileBuffer = await downloadFileFromDrive(pdfFile.id);
+        }
+      }
     }
 
-    // 4. Read PDF file buffer
-    const fileBuffer = fs.readFileSync(absolutePath);
+    if (!fileBuffer) {
+      return NextResponse.json({ error: "Súbor zápisnice nebol nájdený." }, { status: 404 });
+    }
 
-    // 5. Return PDF stream response
-    return new NextResponse(fileBuffer, {
+    // 4. Return PDF stream response
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${fileName}"`

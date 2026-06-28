@@ -8,6 +8,7 @@ import { createAuditLogEntry } from "@/lib/hashChain";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
+import { uploadFileToDrive } from "@/lib/gdrive";
 
 export async function POST(
   request: Request,
@@ -75,6 +76,20 @@ export async function POST(
     const absolutePdfPath = path.join(storageDir, `${pollId}_zapisnica.pdf`);
     
     fs.writeFileSync(absolutePdfPath, pdfBuffer);
+
+    // Upload to Google Drive if driveFolderId is available
+    if (poll.driveFolderId) {
+      try {
+        await uploadFileToDrive(
+          poll.driveFolderId,
+          `${poll.title.replace(/[/\\?%*:|"<>\s]+/g, "_")}_zapisnica.pdf`,
+          "application/pdf",
+          pdfBuffer
+        );
+      } catch (driveErr) {
+        console.error("Failed to upload sealed PDF to Google Drive:", driveErr);
+      }
+    }
 
     // 8. Write to SealedResult
     await db.sealedResult.create({
