@@ -121,6 +121,34 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
 
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+
+  const handleResendEmail = async (email: string, unitNo: string) => {
+    if (!email) return;
+    const confirmSend = confirm(`Naozaj chcete znova odoslať pozvánku na e-mail ${email}?`);
+    if (!confirmSend) return;
+
+    setResendingEmail(`${unitNo}-${email}`);
+    try {
+      const res = await fetch(`/api/admin/poll/${poll.id}/resend`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, unitNo })
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Pozvánka bola úspešne odoslaná na e-mail ${email}.`);
+      } else {
+        alert(data.error || "Odoslanie zlyhalo.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Chyba sieťového pripojenia.");
+    } finally {
+      setResendingEmail(null);
+    }
+  };
+
   const fetchFiles = async () => {
     setLoadingFiles(true);
     try {
@@ -1000,15 +1028,42 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                                 }))
                               );
                               return list.map((item, idx) => (
-                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
                                   <span style={{ minWidth: 200 }}>
                                     <strong>{item.name}</strong>{" "}
                                     <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
                                   </span>
                                   {item.email ? (
-                                    <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                      Odoslané {formatDateStr(poll.announcedAt)}
-                                    </span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                      <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                        Odoslané {formatDateStr(poll.announcedAt)}
+                                      </span>
+                                      <button
+                                        onClick={() => handleResendEmail(item.email!, item.unitNo)}
+                                        disabled={resendingEmail === `${item.unitNo}-${item.email}`}
+                                        title="znova odoslať"
+                                        style={{
+                                          background: "none",
+                                          border: "none",
+                                          cursor: "pointer",
+                                          color: "var(--primary)",
+                                          padding: 2,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          opacity: resendingEmail === `${item.unitNo}-${item.email}` ? 0.5 : 1,
+                                          transition: "transform 0.2s, opacity 0.2s",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.transform = "scale(1.15)";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.transform = "scale(1)";
+                                        }}
+                                      >
+                                        <Ic name="send" size={15} />
+                                      </button>
+                                    </div>
                                   ) : (
                                     <span style={{ color: "var(--disagree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
                                       Neodoslané (chyba kontaktu)
@@ -1032,15 +1087,42 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                                   return <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>Všetci vlastníci už zahlasovali. Žiadne pripomienky nie sú plánované.</div>;
                               }
                               return list.map((item, idx) => (
-                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
+                                <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, gap: 12, borderBottom: "1px solid var(--line)", paddingBottom: 6, flexWrap: "wrap" }}>
                                   <span style={{ minWidth: 200 }}>
                                     <strong>{item.name}</strong>{" "}
                                     <span style={{ color: "var(--ink-soft)", wordBreak: "break-all" }}>({item.email || "bez e-mailu"})</span> · Byt č. {item.unitNo}
                                   </span>
                                   {item.email ? (
-                                    <span style={{ color: "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                      Naplánované (48 h pred koncom)
-                                    </span>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                      <span style={{ color: "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
+                                        Naplánované (48 h pred koncom)
+                                      </span>
+                                      <button
+                                        onClick={() => handleResendEmail(item.email!, item.unitNo)}
+                                        disabled={resendingEmail === `${item.unitNo}-${item.email}`}
+                                        title="znova odoslať"
+                                        style={{
+                                          background: "none",
+                                          border: "none",
+                                          cursor: "pointer",
+                                          color: "var(--primary)",
+                                          padding: 2,
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          justifyContent: "center",
+                                          opacity: resendingEmail === `${item.unitNo}-${item.email}` ? 0.5 : 1,
+                                          transition: "transform 0.2s, opacity 0.2s",
+                                        }}
+                                        onMouseEnter={(e) => {
+                                          e.currentTarget.style.transform = "scale(1.15)";
+                                        }}
+                                        onMouseLeave={(e) => {
+                                          e.currentTarget.style.transform = "scale(1)";
+                                        }}
+                                      >
+                                        <Ic name="send" size={15} />
+                                      </button>
+                                    </div>
                                   ) : (
                                     <span style={{ color: "var(--ink-faint)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
                                       Preskočené (chyba kontaktu)
