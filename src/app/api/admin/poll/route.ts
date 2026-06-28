@@ -58,7 +58,11 @@ export async function POST(request: Request) {
               kind: "Spoločné",
               title: q.text.length > 40 ? q.text.slice(0, 37) + "..." : q.text,
               text: q.text.trim(),
-              majorityType: q.majority as MajorityType,
+              majorityType: (q.majority === "half-all" ? "half_all" :
+                             q.majority === "twothirds-all" ? "twothirds_all" :
+                             q.majority === "fourfifths-all" ? "fourfifths_all" :
+                             q.majority === "half-present" ? "half_present" :
+                             q.majority) as MajorityType,
               note: q.note?.trim() || null
             }))
           }

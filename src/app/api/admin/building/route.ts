@@ -47,3 +47,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Chyba pri ukladaní údajov budovy." }, { status: 500 });
   }
 }
+
+export async function GET(request: Request) {
+  try {
+    const session = await getAdminSession();
+    if (!session || session.role === "vlastnik") {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
+    }
+
+    const building = await db.building.findFirst();
+    if (!building) {
+      return NextResponse.json({ error: "Budova nebola nájdená." }, { status: 404 });
+    }
+
+    const units = await db.unit.findMany({
+      where: { buildingId: building.id },
+      include: {
+        owners: true
+      }
+    });
+
+    return NextResponse.json({ success: true, building, units });
+  } catch (err) {
+    console.error("Building fetch error:", err);
+    return NextResponse.json({ error: "Chyba pri načítaní údajov budovy." }, { status: 500 });
+  }
+}

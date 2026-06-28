@@ -71,8 +71,10 @@ export default function CreatePollPage() {
   const steps = ["Základné údaje", "Otázky a väčšina", "Oprávnené jednotky", "Kontrola a spustenie"];
   
   const [templatesList, setTemplatesList] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [buildingName, setBuildingName] = useState("Bytový dom");
 
-  // Fetch templates from database
+  // Fetch templates & building/units data from database
   React.useEffect(() => {
     fetch("/api/admin/templates")
       .then((res) => res.json())
@@ -82,7 +84,42 @@ export default function CreatePollPage() {
         }
       })
       .catch((err) => console.error("Failed to load templates:", err));
+
+    fetch("/api/admin/building")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setUnits(data.units || []);
+          if (data.building) {
+            setBuildingName(data.building.name || "Bytový dom");
+          }
+        }
+      })
+      .catch((err) => console.error("Failed to load building/units:", err));
   }, []);
+  
+  // Dynamic unit statistics
+  const unitsCount = units.length;
+  const coownersCount = units.filter(u => u.coMode !== "single").length;
+  const noEmailUnits = units.filter(u => !u.email || !u.email.trim());
+
+  const singleBsmCount = units.filter(u => u.coMode === "single" || u.coMode === "bsm").length;
+  const repLegalCount = units.filter(u => u.coMode === "rep" || u.coMode === "legal").length;
+  const internalCount = units.filter(u => u.coMode === "internal").length;
+  const majorityCount = units.filter(u => u.coMode === "majority").length;
+
+  const noEmailText = noEmailUnits.length === 0
+    ? "žiadny"
+    : noEmailUnits.length === 1
+      ? `byt č. ${noEmailUnits[0].no}`
+      : `byty č. ${noEmailUnits.map(u => u.no).join(", ")}`;
+
+  // Slovak unit count formatter
+  const fmtUnits = (count: number) => {
+    if (count === 1) return "1 jednotka";
+    if (count >= 2 && count <= 4) return `${count} jednotky`;
+    return `${count} jednotiek`;
+  };
   
   const [basics, setBasics] = useState({
     title: "",
@@ -549,24 +586,31 @@ export default function CreatePollPage() {
               </div>
             </div>
             
+            {unitsCount === 0 && (
+              <div style={{ background: "var(--disagree-bg)", color: "var(--disagree)", border: "1px solid var(--line)", borderRadius: 10, padding: "12px 16px", marginBottom: 18, fontSize: "13.5px", lineHeight: 1.45 }}>
+                <strong>V bytovom dome {buildingName} zatiaľ nie sú zadané žiadne byty ani vlastníci!</strong><br/>
+                Najskôr prosím pridajte byty a vlastníkov v sekcii <strong>„Dom a vlastníci“</strong>, inak nebude možné vytvoriť hlasovanie.
+              </div>
+            )}
+            
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "repeat(3,1fr)", gap: 12, marginBottom: 18 }}>
               <Card pad={16}>
-                <Stat label="Zahrnuté jednotky" value="36 / 36" />
+                <Stat label="Zahrnuté jednotky" value={`${unitsCount} / ${unitsCount}`} />
               </Card>
               <Card pad={16}>
-                <Stat label="So spoluvlastníkmi" value="5" sub="rieši sa podľa režimu" />
+                <Stat label="So spoluvlastníkmi" value={String(coownersCount)} sub="rieši sa podľa režimu" />
               </Card>
               <Card pad={16}>
-                <Stat label="Bez e-mailu" value="1" tone="var(--disagree)" sub="byt č. 8" />
+                <Stat label="Bez e-mailu" value={String(noEmailUnits.length)} tone={noEmailUnits.length > 0 ? "var(--disagree)" : undefined} sub={noEmailText} />
               </Card>
             </div>
             
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {[
-                { title: "Jediný vlastník / BSM", desc: "Link dostane určená osoba", count: "30 jednotiek" },
-                { title: "Určený zástupca bytu", desc: "Link iba zástupcovi, ostatní info kópiu", count: "1 jednotka" },
-                { title: "Interné hlasovanie spoluvlastníkov", desc: "Link každému spoluvlastníkovi zvlášť", count: "2 jednotky" },
-                { title: "Väčšinový spoluvlastník", desc: "Link len väčšinovému vlastníkovi podielu", count: "1 jednotka" },
+                { title: "Jediný vlastník / BSM", desc: "Link dostane určená osoba", count: fmtUnits(singleBsmCount) },
+                { title: "Určený zástupca bytu", desc: "Link iba zástupcovi, ostatní info kópiu", count: fmtUnits(repLegalCount) },
+                { title: "Interné hlasovanie spoluvlastníkov", desc: "Link každému spoluvlastníkovi zvlášť", count: fmtUnits(internalCount) },
+                { title: "Väčšinový spoluvlastník", desc: "Link len väčšinovému vlastníkovi podielu", count: fmtUnits(majorityCount) },
               ].map((g, idx) => (
                 <div key={idx} style={{ display: "flex", alignItems: "center", gap: 14, padding: "13px 16px", border: "1px solid var(--line)", borderRadius: 10 }}>
                   <Ic name="users" size={18} style={{ color: "var(--ink-soft)" }} />
@@ -593,22 +637,33 @@ export default function CreatePollPage() {
             <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1.2fr 1fr", gap: 22 }}>
               <div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
-                    <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ color: "var(--ink)" }}>Každá otázka má priradenú väčšinu</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
-                    <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ color: "var(--ink)" }}>Všetci vlastníci sú priradení k jednotkám</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
-                    <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ color: "var(--ink)" }}>Vyriešené režimy spoluvlastníctva</span>
-                  </div>
-                  <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
-                    <Ic name="alert" size={18} style={{ color: "var(--accent-ink)", flexShrink: 0, marginTop: 1 }} />
-                    <span style={{ color: "var(--accent-ink)" }}>Byt č. 8 nemá nahlásenú e-mailovú adresu</span>
-                  </div>
+                  {unitsCount === 0 ? (
+                    <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
+                      <Ic name="alert" size={18} style={{ color: "var(--disagree)", flexShrink: 0, marginTop: 1 }} />
+                      <span style={{ color: "var(--disagree)", fontWeight: 600 }}>V bytovom dome nie sú zadané žiadne jednotky ani vlastníci!</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
+                        <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
+                        <span style={{ color: "var(--ink)" }}>Každá otázka má priradenú väčšinu</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
+                        <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
+                        <span style={{ color: "var(--ink)" }}>Všetci vlastníci sú priradení k jednotkám</span>
+                      </div>
+                      <div style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
+                        <Ic name="checkCircle" size={18} style={{ color: "var(--agree)", flexShrink: 0, marginTop: 1 }} />
+                        <span style={{ color: "var(--ink)" }}>Vyriešené režimy spoluvlastníctva</span>
+                      </div>
+                      {noEmailUnits.map((u, idx) => (
+                        <div key={idx} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "13.5px" }}>
+                          <Ic name="alert" size={18} style={{ color: "var(--accent-ink)", flexShrink: 0, marginTop: 1 }} />
+                          <span style={{ color: "var(--accent-ink)" }}>Byt č. {u.no} nemá nahlásenú e-mailovú adresu</span>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
                 
                 <div
@@ -650,7 +705,7 @@ export default function CreatePollPage() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 13 }}>
                   <span style={{ color: "var(--ink-soft)" }}>Oprávnené hlasy</span>
-                  <span style={{ fontWeight: 600, textAlign: "right" }}>36 jednotiek</span>
+                  <span style={{ fontWeight: 600, textAlign: "right" }}>{fmtUnits(unitsCount)}</span>
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "7px 0", borderTop: "1px solid var(--line)", fontSize: 13 }}>
                   <span style={{ color: "var(--ink-soft)" }}>Odosielateľ</span>
@@ -667,11 +722,11 @@ export default function CreatePollPage() {
           {step > 0 ? "Späť" : "Zrušiť"}
         </Btn>
         {step < 3 ? (
-          <Btn kind="primary" iconR="chevR" onClick={validateStep} disabled={loading}>
+          <Btn kind="primary" iconR="chevR" onClick={validateStep} disabled={loading || (step === 2 && unitsCount === 0)}>
             Pokračovať
           </Btn>
         ) : (
-          <Btn kind="gold" icon="send" onClick={handleLaunch} disabled={loading}>
+          <Btn kind="gold" icon="send" onClick={handleLaunch} disabled={loading || unitsCount === 0}>
             {loading ? "Spúšťam hlasovanie..." : "Spustiť a odoslať pozvánky"}
           </Btn>
         )}
