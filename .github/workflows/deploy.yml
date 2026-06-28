@@ -29,8 +29,8 @@ jobs:
             # Install dependencies (development dependencies are required for build)
             npm install --production=false
             
-            # Run database migrations
-            npx prisma migrate deploy
+            # Run database schema push
+            npx prisma db push
             
             # Build the Next.js application
             npm run build

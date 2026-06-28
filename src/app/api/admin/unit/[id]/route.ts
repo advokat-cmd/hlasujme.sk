@@ -84,6 +84,8 @@ export async function PUT(
               last: o.last.trim(),
               name: ownerName,
               email: ownerEmail,
+              phone: o.phone?.trim() || null,
+              birthDate: o.birthDate?.trim() || null,
               share: o.share || 1.0,
               role: o.role as OwnerRole || OwnerRole.owner
             }
@@ -97,6 +99,8 @@ export async function PUT(
               last: o.last.trim(),
               name: ownerName,
               email: ownerEmail,
+              phone: o.phone?.trim() || null,
+              birthDate: o.birthDate?.trim() || null,
               share: o.share || 1.0,
               role: o.role as OwnerRole || OwnerRole.owner
             }

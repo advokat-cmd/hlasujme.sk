@@ -76,6 +76,8 @@ model Owner {
   last       String
   name       String
   email      String?
+  phone      String?
+  birthDate  String?
   share      Float     @default(1.0)
   role       OwnerRole @default(owner)
   

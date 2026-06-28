@@ -55,6 +55,8 @@ export async function POST(request: Request) {
             last: o.last.trim(),
             name: `${o.first.trim()} ${o.last.trim()}`.trim(),
             email: o.email.trim() || null,
+            phone: o.phone?.trim() || null,
+            birthDate: o.birthDate?.trim() || null,
             share: o.share || 1.0,
             role: o.role as OwnerRole || OwnerRole.owner,
           })),

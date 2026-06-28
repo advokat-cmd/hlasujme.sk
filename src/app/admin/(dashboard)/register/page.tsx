@@ -55,6 +55,8 @@ export default async function AdminRegisterPage() {
       last: o.last,
       name: o.name,
       email: o.email,
+      phone: o.phone,
+      birthDate: o.birthDate,
       share: o.share,
       role: o.role,
       admin: o.admins.length > 0

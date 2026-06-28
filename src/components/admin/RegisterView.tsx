@@ -18,6 +18,8 @@ interface RegisterOwner {
   last: string;
   name: string;
   email: string | null;
+  phone: string | null;
+  birthDate: string | null;
   share: number;
   role: string;
   admin: boolean;
@@ -376,8 +378,22 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                                 {u.coMode === "rep" && idx === 0 && <Pill tone="accent" size="sm" icon="check">hlasuje za byt</Pill>}
                                 {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
                               </div>
-                              <div style={{ fontSize: "11.5px", color: "var(--ink-soft)" }}>
-                                {o.email || "bez e-mailu"} · podiel {Math.round(o.share * 100)}%
+                              <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", display: "flex", flexWrap: "wrap", gap: "4px 8px", alignItems: "center" }}>
+                                <span>{o.email || "bez e-mailu"}</span>
+                                <span>·</span>
+                                <span>podiel {Math.round(o.share * 100)}%</span>
+                                {o.phone && (
+                                  <>
+                                    <span>·</span>
+                                    <span>tel: {o.phone}</span>
+                                  </>
+                                )}
+                                {o.birthDate && (
+                                  <>
+                                    <span>·</span>
+                                    <span>nar: {o.birthDate}</span>
+                                  </>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -535,7 +551,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   const [email, setEmail] = useState(unit?.email || "");
   const [coMode, setCoMode] = useState(unit?.coMode || "single");
   const [owners, setOwners] = useState<any[]>(
-    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", password: "" })) : [{ id: Math.random().toString(), first: "", last: "", email: "", share: 1, role: "owner", admin: false, password: "" }]
+    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: Math.random().toString(), first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -545,7 +561,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   };
 
   const addOwner = () => {
-    setOwners((os) => [...os, { id: Math.random().toString(), first: "", last: "", email: "", share: 0.5, role: "coowner", admin: false, password: "" }]);
+    setOwners((os) => [...os, { id: Math.random().toString(), first: "", last: "", email: "", phone: "", birthDate: "", share: 0.5, role: "coowner", admin: false, password: "" }]);
   };
 
   const rmOwner = (i: number) => {
@@ -727,6 +743,15 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
                 />
               </FormRow>
             )}
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <FormRow label="Telefón">
+              <Input value={o.phone || ""} onChange={(e) => setOwner(idx, "phone", e.target.value)} placeholder="napr. +421 900 000 000" />
+            </FormRow>
+            <FormRow label="Dátum narodenia">
+              <Input value={o.birthDate || ""} onChange={(e) => setOwner(idx, "birthDate", e.target.value)} placeholder="napr. 12.03.1985" />
+            </FormRow>
           </div>
 
           <FormRow label="Rola" hint="Administrátor sa môže prihlásiť do aplikácie a spravovať dom, hlasovania a vlastníkov.">
