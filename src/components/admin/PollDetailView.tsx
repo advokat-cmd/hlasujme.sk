@@ -9,7 +9,7 @@ import { Pill } from "../ui/Pill";
 import { Card } from "../ui/Card";
 import { Progress } from "../ui/Progress";
 import { PageHead } from "./PageHead";
-import { TableScroll } from "../ui/LayoutHelpers";
+import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { VOTE_STYLE } from "../ui/Pill";
 import { CloseModal } from "./CloseModal";
 
@@ -81,6 +81,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   emailStats,
 }) => {
   const router = useRouter();
+  const isMobile = useNarrow(600);
   const [tab, setTab] = useState("results");
   const [closing, setClosing] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -298,45 +299,106 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {questions.map((q) => (
-              <Card pad={0} key={q.id} style={{ overflow: "hidden" }}>
-                <div style={{ padding: "20px 24px", display: "flex", gap: 18, alignItems: "flex-start" }}>
-                  <div
-                    style={{
-                      width: 34,
-                      height: 34,
-                      borderRadius: 8,
-                      background: "var(--primary)",
-                      color: "#fff",
-                      flexShrink: 0,
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontFamily: "var(--serif)",
-                      fontSize: 17,
-                      fontWeight: 600,
-                    }}
-                  >
-                    {q.no}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
-                      <Pill tone="neutral" size="sm">
-                        {q.kind}
-                      </Pill>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
-                        <Ic name="scale" size={13} /> {getMajorityLabel(q.majorityType)}
-                      </span>
-                    </div>
-                    <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>
-                      {q.title}
-                    </h3>
-                    <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 640 }}>
-                      {q.text}
-                    </p>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    {getStatusPill(q.tally.status)}
-                  </div>
+              <Card pad={0} key={q.id} style={{ overflow: "hidden", marginBottom: 20 }}>
+                <div
+                  style={isMobile ? {
+                    padding: "16px 16px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 12,
+                  } : {
+                    padding: "20px 24px",
+                    display: "flex",
+                    gap: 18,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  {isMobile ? (
+                    <>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div
+                            style={{
+                              width: 30,
+                              height: 30,
+                              borderRadius: 8,
+                              background: "var(--primary)",
+                              color: "#fff",
+                              flexShrink: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontFamily: "var(--serif)",
+                              fontSize: 15,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {q.no}
+                          </div>
+                          <Pill tone="neutral" size="sm">
+                            {q.kind}
+                          </Pill>
+                        </div>
+                        <div>
+                          {getStatusPill(q.tally.status)}
+                        </div>
+                      </div>
+                      
+                      <div style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-soft)", fontWeight: 600, flexWrap: "wrap" }}>
+                        <Ic name="scale" size={13} style={{ flexShrink: 0 }} />
+                        <span style={{ lineHeight: 1.3 }}>{getMajorityLabel(q.majorityType)}</span>
+                      </div>
+
+                      <div>
+                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 6px", lineHeight: 1.3 }}>
+                          {q.title}
+                        </h3>
+                        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5 }}>
+                          {q.text}
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div
+                        style={{
+                          width: 34,
+                          height: 34,
+                          borderRadius: 8,
+                          background: "var(--primary)",
+                          color: "#fff",
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontFamily: "var(--serif)",
+                          fontSize: 17,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {q.no}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+                          <Pill tone="neutral" size="sm">
+                            {q.kind}
+                          </Pill>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12, color: "var(--ink-soft)", fontWeight: 600 }}>
+                            <Ic name="scale" size={13} /> {getMajorityLabel(q.majorityType)}
+                          </span>
+                        </div>
+                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>
+                          {q.title}
+                        </h3>
+                        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 640 }}>
+                          {q.text}
+                        </p>
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        {getStatusPill(q.tally.status)}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div style={{ display: "flex", flexWrap: "wrap", borderTop: "1px solid var(--line)" }}>
