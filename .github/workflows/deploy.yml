@@ -1,0 +1,39 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Server via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            cd /var/www/hlasovanie
+            git config --global --add safe.directory /var/www/hlasovanie
+            git fetch --all
+            git checkout main
+            git pull origin main
+            
+            # Install dependencies (development dependencies are required for build)
+            npm install --production=false
+            
+            # Run database migrations
+            npx prisma migrate deploy
+            
+            # Build the Next.js application
+            npm run build
+            
+            # Restart the systemd service
+            systemctl restart hlasovanie

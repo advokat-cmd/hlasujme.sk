@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { createAuditLogEntry } from "@/lib/hashChain";
+import { revalidatePath } from "next/cache";
 
 export async function POST(request: Request) {
   try {
@@ -36,6 +37,9 @@ export async function POST(request: Request) {
       buildingId: building.id,
       name,
     });
+
+    revalidatePath("/admin/register");
+    revalidatePath("/admin");
 
     return NextResponse.json({ success: true, building: updated });
   } catch (err) {
