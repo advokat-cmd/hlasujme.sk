@@ -424,6 +424,30 @@ async function main() {
     }
   });
 
+  // 9. Seed Question Templates
+  await prisma.questionTemplate.createMany({
+    data: [
+      {
+        title: "Výmena stúpačiek (spoločných rozvodov plynu, vody a kanalizácie)",
+        text: "Súhlasíte s výmenou spoločných rozvodov plynu, studenej vody, teplej vody, cirkulácie a kanalizácie (stúpačiek) v bytovom dome Björnsonova 3, podľa predloženej projektovej dokumentácie a cenovej ponuky spoločnosti REKOPLAST s.r.o. v sume najviac 38 500 € s DPH, hradenej z fondu prevádzky, údržby a opráv, s termínom realizácie najneskôr do 30. novembra 2026?",
+        majorityType: "half-all",
+        note: "Podľa § 14b ods. 1 písm. g) zákona č. 182/1993 Z.z. o vlastníctve bytov a nebytových priestorov sa vyžaduje súhlas nadpolovičnej väčšiny hlasov všetkých vlastníkov bytov a nebytových priestorov v dome."
+      },
+      {
+        title: "Celková rekonštrukcia a zateplenie strešného plášťa",
+        text: "Súhlasíte s realizáciou celkovej rekonštrukcie a zateplenia strešného plášťa bytového domu Björnsonova 3 podľa cenovej ponuky spoločnosti STRECHY-SK s.r.o. vo výške najviac 65 000 € s DPH, financovanej z fondu prevádzky, údržby a opráv a z prostriedkov úveru, a so splnomocnením zástupcu vlastníkov na podpis zmluvy o dielo s víťazným uchádzačom?",
+        majorityType: "twothirds-all",
+        note: "Hlasovanie o oprave spoločných častí domu financovanej z úveru vyžaduje súhlas dvojtretinovej väčšiny hlasov všetkých vlastníkov podľa § 14b ods. 2 písm. b) zákona č. 182/1993 Z.z."
+      },
+      {
+        title: "Zateplenie a obnova obvodového plášťa bytového domu",
+        text: "Súhlasíte so zateplením obvodového plášťa bytového domu Björnsonova 3, odstránením systémových porúch loggií a obnovou fasády podľa spracovanej projektovej dokumentácie, za celkovú cenu diela maximálne 145 000 € s DPH, s využitím finančného príspevku zo Štátneho fondu rozvoja bývania (ŠFRB) alebo bankového úveru so splatnosťou 20 rokov?",
+        majorityType: "twothirds-all",
+        note: "Rozhodovanie o zateplení, zásadných opravách obvodového plášťa a prijatí úveru vyžaduje dvojtretinovú väčšinu všetkých vlastníkov podľa § 14b ods. 2 písm. a) a b) zákona č. 182/1993 Z.z."
+      }
+    ]
+  });
+
   console.log("Seeding complete!");
 }
 

@@ -37,21 +37,7 @@ const MAJORITY_OPTS = {
   "half-present": { label: "Nadpolovičná väčšina zúčastnených", frac: "> 1/2 hlasujúcich" },
 };
 
-const TEMPLATES = [
-  "Schválenie použitia fondu opráv",
-  "Zvýšenie mesačného preddavku do fondu opráv",
-  "Výber dodávateľa",
-  "Oprava strechy",
-  "Výmena stúpačiek",
-  "Kamerový systém",
-  "Zmena správcu",
-  "Voľba zástupcu vlastníkov",
-  "Zmena domového poriadku",
-  "Úver",
-  "Zateplenie",
-  "Stavebná úprava spoločných častí",
-  "Prenájom spoločných priestorov",
-];
+
 
 const fieldStyle: React.CSSProperties = {
   width: "100%",
@@ -83,6 +69,20 @@ export default function CreatePollPage() {
   }, [router]);
 
   const steps = ["Základné údaje", "Otázky a väčšina", "Oprávnené jednotky", "Kontrola a spustenie"];
+  
+  const [templatesList, setTemplatesList] = useState<any[]>([]);
+
+  // Fetch templates from database
+  React.useEffect(() => {
+    fetch("/api/admin/templates")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.templates) {
+          setTemplatesList(data.templates);
+        }
+      })
+      .catch((err) => console.error("Failed to load templates:", err));
+  }, []);
   
   const [basics, setBasics] = useState({
     title: "",
@@ -336,28 +336,42 @@ export default function CreatePollPage() {
                   </div>
                   
                   {tmplFor === q.id && (
-                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexWrap: "wrap", gap: 7 }}>
-                      {TEMPLATES.map((t) => (
-                        <button
-                          key={t}
-                          onClick={() => {
-                            setQVal(q.id, { text: "Súhlasíte s: " + t + "…" });
-                            setTmplFor(null);
-                          }}
-                          style={{
-                            fontSize: 12,
-                            padding: "5px 11px",
-                            borderRadius: 999,
-                            border: "1px solid var(--line)",
-                            background: "var(--surface)",
-                            cursor: "pointer",
-                            color: "var(--ink-soft)",
-                            fontFamily: "inherit",
-                          }}
-                        >
-                          {t}
-                        </button>
-                      ))}
+                    <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--line)", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-soft)" }}>Zvoľte šablónu pre automatické vyplnenie:</div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
+                        {templatesList.length > 0 ? (
+                          templatesList.map((t) => (
+                            <button
+                              key={t.id}
+                              onClick={() => {
+                                setQVal(q.id, {
+                                  text: t.text,
+                                  majority: t.majorityType,
+                                  note: t.note || ""
+                                });
+                                setTmplFor(null);
+                              }}
+                              style={{
+                                fontSize: 12,
+                                padding: "6px 12px",
+                                borderRadius: 12,
+                                border: "1px solid var(--line)",
+                                background: "var(--surface)",
+                                cursor: "pointer",
+                                color: "var(--ink-soft)",
+                                fontFamily: "inherit",
+                                textAlign: "left"
+                              }}
+                            >
+                              <strong>{t.title}</strong>
+                            </button>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: 12, color: "var(--ink-soft)" }}>
+                            Žiadne šablóny nie sú k dispozícii.
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
 
@@ -413,7 +427,29 @@ export default function CreatePollPage() {
                       </div>
                     </FormRow>
                     
-                    <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: "12.5px", color: "var(--ink-soft)", flexWrap: "wrap" }}>
+                    <FormRow label="Poznámka / Odkaz na zákon (nepovinné)" hint="Napr. citácia znenia zákona o vlastníctve bytov.">
+                      <textarea
+                        style={{
+                          width: "100%",
+                          boxSizing: "border-box",
+                          padding: "10px 13px",
+                          borderRadius: 9,
+                          border: "1px solid var(--line)",
+                          fontFamily: "inherit",
+                          fontSize: "13.5px",
+                          background: "var(--paper)",
+                          color: "var(--ink)",
+                          minHeight: 56,
+                          resize: "vertical",
+                          lineHeight: 1.5,
+                        }}
+                        placeholder="Podľa § 14b..."
+                        value={q.note || ""}
+                        onChange={(e) => setQVal(q.id, { note: e.target.value })}
+                      />
+                    </FormRow>
+                    
+                    <div style={{ display: "flex", alignItems: "center", gap: 9, fontSize: "12.5px", color: "var(--ink-soft)", flexWrap: "wrap", marginTop: 14 }}>
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>Možnosti odpovede:</span>
                       <Pill tone="agree" size="sm" icon="check">
                         Súhlasím

@@ -80,6 +80,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
         { id: "poll-active", label: "Hlasovania (aktívne)", icon: "vote", href: "/admin/poll/active" },
         { id: "poll-archive", label: "Hlasovania (archív)", icon: "archive", href: "/admin/poll/archive" },
         { id: "register", label: "Dom a vlastníci", icon: "building", href: "/admin/register" },
+        { id: "settings", label: "Nastavenia", icon: "scale", href: "/admin/settings" },
       ];
 
   const handleLogout = async () => {
@@ -99,6 +100,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
     if (pathname.startsWith("/admin/poll/archive")) return "poll-archive";
     if (pathname.startsWith("/admin/poll")) return "poll-active";
     if (pathname.startsWith("/admin/register")) return "register";
+    if (pathname.startsWith("/admin/settings")) return "settings";
     return "";
   };
 
