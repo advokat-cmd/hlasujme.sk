@@ -27,27 +27,25 @@ export default async function AdminSettingsPage() {
       data: {
         key: "invitation",
         subject: "Pozvánka na hlasovanie: {pollTitle}",
-        body: `<div style="font-family: sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA;">
-  <h2 style="font-family: Georgia, serif; color: #1F3A5F; margin-top: 0;">Pozvánka na elektronické hlasovanie</h2>
-  <p>Vážený vlastník <strong>{ownerName}</strong>,</p>
-  <p>v bytovom dome <strong>{buildingName}</strong> bolo vyhlásené elektronické hlasovanie:</p>
-  
-  <div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #E5DFD3; margin: 15px 0;">
-    <h3 style="margin-top: 0; color: #1F3A5F;">{pollTitle}</h3>
-    <p style="margin-bottom: 0; color: #5C6473; font-size: 14px;"><strong>Dôvod:</strong> {pollReason}</p>
-    <p style="margin-bottom: 0; color: #5C6473; font-size: 14px;"><strong>Termín na hlasovanie:</strong> do {endFormatted}</p>
-  </div>
+        body: `<h2>Pozvánka na elektronické hlasovanie</h2>
+<p>Vážený vlastník <strong>{ownerName}</strong>,</p>
+<p>v bytovom dome <strong>{buildingName}</strong> bolo vyhlásené elektronické hlasovanie:</p>
 
-  <p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link) nižšie. Nikomu tento odkaz neposielajte, slúži ako Vaša jednoznačná identifikácia:</p>
-  
-  <div style="text-align: center; margin: 25px 0;">
-    <a href="{magicLink}" style="background-color: #1F3A5F; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">👉 HLASOVAŤ ELEKTRONICKY</a>
-  </div>
+<div class="box">
+  <h3>{pollTitle}</h3>
+  <p class="meta"><strong>Dôvod:</strong> {pollReason}</p>
+  <p class="meta"><strong>Termín na hlasovanie:</strong> do {endFormatted}</p>
+</div>
 
-  <p style="font-size: 12px; color: #606673; line-height: 1.4;">
-    Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť kliknutím na tento odkaz — započíta sa posledné odoslané hlasovanie.
-  </p>
-</div>`
+<p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link) nižšie. Nikomu tento odkaz neposielajte, slúži ako Vaša jednoznačná identifikácia:</p>
+
+<div style="text-align: center; margin: 25px 0;">
+  <a class="btn" href="{magicLink}">👉 HLASOVAŤ ELEKTRONICKY</a>
+</div>
+
+<p class="note">
+  Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť kliknutím na tento odkaz — započíta sa posledné odoslané hlasovanie.
+</p>`
       }
     });
     emailTemplates.push(defaultInvitation);
@@ -58,22 +56,20 @@ export default async function AdminSettingsPage() {
       data: {
         key: "protocol",
         subject: "Výsledok hlasovania: {pollTitle}",
-        body: `<div style="font-family: sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA;">
-  <h2 style="font-family: Georgia, serif; color: #1F3A5F; margin-top: 0;">Výsledok hlasovania</h2>
-  <p>Vážený vlastník <strong>{ownerName}</strong>,</p>
-  <p>oznamujeme Vám, že elektronické hlasovanie bolo ukončené a výsledky boli oficiálne zapečatené:</p>
-  
-  <div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #E5DFD3; margin: 15px 0;">
-    <h3 style="margin-top: 0; color: #1F3A5F; font-size: 16px;">{pollTitle}</h3>
-    <p style="color: #606673; font-size: 13px; margin-bottom: 12px;"><strong>Stav:</strong> Uzavreté a overené</p>
-    <p style="margin: 0; color: #606673; font-size: 13px;"><strong>Zápisnica (PDF):</strong> Na stiahnutie kliknutím na odkaz nižšie</p>
-  </div>
+        body: `<h2>Výsledok hlasovania</h2>
+<p>Vážený vlastník <strong>{ownerName}</strong>,</p>
+<p>oznamujeme Vám, že elektronické hlasovanie bolo ukončené a výsledky boli oficiálne zapečatené:</p>
 
-  <p>Kompletnú zápisnicu o priebehu a výsledkoch si môžete stiahnuť aj priamo kliknutím na odkaz nižšie (odkaz nevyžaduje prihlásenie):</p>
-  
-  <div style="text-align: center; margin: 25px 0;">
-    <a href="{protocolLink}" style="background-color: #1F3A5F; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Stiahnuť zápisnicu (PDF)</a>
-  </div>
+<div class="box">
+  <h3>{pollTitle}</h3>
+  <p class="meta"><strong>Stav:</strong> Uzavreté a overené</p>
+  <p class="meta"><strong>Zápisnica (PDF):</strong> Na stiahnutie kliknutím na odkaz nižšie</p>
+</div>
+
+<p>Kompletnú zápisnicu o priebehu a výsledkoch si môžete stiahnuť aj priamo kliknutím na odkaz nižšie (odkaz nevyžaduje prihlásenie):</p>
+
+<div style="text-align: center; margin: 25px 0;">
+  <a class="btn" href="{protocolLink}">Stiahnuť zápisnicu (PDF)</a>
 </div>`
       }
     });
@@ -85,29 +81,73 @@ export default async function AdminSettingsPage() {
       data: {
         key: "credentials",
         subject: "Prihlasovacie údaje: Bytový dom {buildingShort}",
-        body: `<div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff; color: #1e293b;">
-  <h2 style="font-size: 18px; font-weight: 600; color: #1e3a8a; margin-top: 0; border-bottom: 2px solid #3b82f6; padding-bottom: 8px;">
-    Prihlasovacie údaje k hlasovaciemu systému
-  </h2>
-  <p style="font-size: 14px; line-height: 1.5; color: #334155; margin-top: 16px;">
-    Dobrý deň, <strong>{ownerName}</strong>,<br>
-    administrátor bytového domu <strong>{buildingName}</strong> Vám vygeneroval prístup do klientskej zóny hlasovacieho systému, kde si môžete kedykoľvek prečítať a stiahnuť výsledky hlasovaní.
-  </p>
-  <div style="background: #f8fafc; padding: 18px; border-radius: 8px; margin: 20px 0; border: 1px solid #e2e8f0; font-size: 14px;">
-    <p style="margin: 0 0 10px;"><strong>Prihlasovacia stránka:</strong> <a href="{loginLink}" style="color: #3b82f6; text-decoration: underline;">{loginLink}</a></p>
-    <p style="margin: 0 0 10px;"><strong>Prihlasovací e-mail:</strong> {loginEmail}</p>
-    <p style="margin: 0;"><strong>Prihlasovacie heslo:</strong> <code style="font-family: monospace; font-size: 15px; color: #b91c1c; font-weight: bold; background: #fee2e2; padding: 2px 6px; border-radius: 4px;">{rawPassword}</code></p>
-  </div>
-  <p style="font-size: 13px; color: #b91c1c; font-weight: 600; line-height: 1.5; background: #fffbeb; border: 1px solid #fef3c7; padding: 10px 12px; border-radius: 6px; margin: 18px 0;">
-    ⚠️ Dôležité upozornenie: Pri prvom prihlásení Vás systém vyzve na zmenu tohto automaticky vygenerovaného hesla za Vaše vlastné bezpečné heslo.
-  </p>
-  <p style="font-size: 13px; color: #64748b; line-height: 1.5; margin-bottom: 0;">
-    Tento e-mail bol odoslaný automaticky. Neodpovedajte naň.
-  </p>
-</div>`
+        body: `<h2>Prihlasovacie údaje k hlasovaciemu systému</h2>
+<p>Dobrý deň, <strong>{ownerName}</strong>,</p>
+<p>administrátor bytového domu <strong>{buildingName}</strong> Vám vygeneroval prístup do klientskej zóny hlasovacieho systému, kde si môžete kedykoľvek prečítať a stiahnuť výsledky hlasovaní.</p>
+
+<div class="box">
+  <p class="meta"><strong>Prihlasovacia stránka:</strong> <a href="{loginLink}">{loginLink}</a></p>
+  <p class="meta"><strong>Prihlasovací e-mail:</strong> {loginEmail}</p>
+  <p class="meta"><strong>Prihlasovacie heslo:</strong> <code class="pass">{rawPassword}</code></p>
+</div>
+
+<p class="warn">
+  ⚠️ Dôležité upozornenie: Pri prvom prihlásení Vás systém vyzve na zmenu tohto automaticky vygenerovaného hesla za Vaše vlastné bezpečné heslo.
+</p>
+
+<p class="note">
+  Tento e-mail bol odoslaný automaticky. Neodpovedajte naň.
+</p>`
       }
     });
     emailTemplates.push(defaultCredentials);
+  }
+
+  if (!emailTemplates.some(t => t.key === "reminder")) {
+    const defaultReminder = await db.emailTemplate.create({
+      data: {
+        key: "reminder",
+        subject: "UPOZORNENIE: Pripomienka k hlasovaniu: {pollTitle}",
+        body: `<h2>Pripomienka k elektronickému hlasovaniu</h2>
+<p>Vážený vlastník <strong>{ownerName}</strong>,</p>
+<p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>{buildingName}</strong>, ktoré končí o 48 hodín:</p>
+
+<div class="box">
+  <h3>{pollTitle}</h3>
+  <p class="meta"><strong>Koniec hlasovania:</strong> do {endFormatted}</p>
+</div>
+
+<p>Ak ste doteraz neodovzdali svoj hlas, môžete tak urobiť kliknutím na odkaz nižšie:</p>
+
+<div style="text-align: center; margin: 25px 0;">
+  <a class="btn" href="{magicLink}">👉 HLASOVAŤ ELEKTRONICKY</a>
+</div>`
+      }
+    });
+    emailTemplates.push(defaultReminder);
+  }
+
+  if (!emailTemplates.some(t => t.key === "confirmation")) {
+    const defaultConfirmation = await db.emailTemplate.create({
+      data: {
+        key: "confirmation",
+        subject: "Potvrdenie o hlasovaní: {pollTitle}",
+        body: `<h2>Potvrdenie o hlasovaní</h2>
+<p>Vážený vlastník <strong>{ownerName}</strong>,</p>
+<p>potvrdzujeme prijatie Vášho hlasu za byt/NP <strong>č. {unitNo}</strong> v hlasovaní:</p>
+
+<div class="box">
+  <h3>{pollTitle}</h3>
+  <p class="meta"><strong>Prijaté dňa:</strong> {dateFormatted}</p>
+  <ul style="padding-left: 20px; margin: 0; font-size: 13.5px; line-height: 1.5; color: #5C6473;">
+    {answersList}
+  </ul>
+</div>
+
+<p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu. Do uzávierky môžete svoje rozhodnutie zmeniť opätovným otvorením Vášho magic-linku v pôvodnom e-maile.</p>`
+      }
+    });
+    emailTemplates.push(defaultConfirmation);
   }
 
   // Map to clean client model

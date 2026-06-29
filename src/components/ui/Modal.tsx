@@ -27,6 +27,11 @@ export const Modal: React.FC<ModalProps> = ({
   const isMobile = useNarrow(600);
   const titleId = useRef("modal-title-" + Math.random().toString(36).slice(2, 8)).current;
 
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   useEffect(() => {
     const panel = panelRef.current;
     const prevFocus = document.activeElement as HTMLElement | null;
@@ -38,7 +43,7 @@ export const Modal: React.FC<ModalProps> = ({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
         return;
       }
       
@@ -68,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
         prevFocus.focus();
       }
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div

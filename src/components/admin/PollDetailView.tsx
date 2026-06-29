@@ -87,6 +87,7 @@ interface PollDetailViewProps {
     missingEmailsUnits: string[];
   };
   userRole?: string;
+  emailTemplates?: Array<{ key: string; subject: string; body: string }>;
 }
 
 export const PollDetailView: React.FC<PollDetailViewProps> = ({
@@ -95,6 +96,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   unitVotesList,
   emailStats,
   userRole,
+  emailTemplates,
 }) => {
   const router = useRouter();
   const isMobile = useNarrow(600);
@@ -234,6 +236,176 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     hour: "2-digit",
     minute: "2-digit",
   });
+
+  const getEmailPreview = (
+    key: string,
+    defaultSubject: string,
+    defaultBody: React.ReactNode
+  ): { subject: string; body: React.ReactNode } => {
+    const template = emailTemplates?.find((t) => t.key === key);
+    if (!template) {
+      return { subject: defaultSubject, body: defaultBody };
+    }
+
+    const formattedSubject = template.subject
+      .replace(/{pollTitle}/g, poll.title)
+      .replace(/{buildingShort}/g, "Björnsonova 3");
+
+    const answersListHtml = `
+      <li style="margin-bottom: 6px;">
+        <strong>Otázka 1:</strong> Schválenie rozpočtu na rok 2026 <br/>
+        Odpoveď: <span style="font-weight: bold; color: var(--agree)">Súhlasím</span>
+      </li>
+      <li>
+        <strong>Otázka 2:</strong> Voľba zástupcu vlastníkov <br/>
+        Odpoveď: <span style="font-weight: bold; color: var(--disagree)">Nesúhlasím</span>
+      </li>
+    `;
+
+    const bodyHtml = template.body
+      .replace(/{ownerName}/g, "[Meno vlastníka]")
+      .replace(/{buildingName}/g, "Björnsonova 3")
+      .replace(/{buildingShort}/g, "Björnsonova 3")
+      .replace(/{pollTitle}/g, poll.title)
+      .replace(/{pollReason}/g, poll.reason || "Bežná údržba")
+      .replace(/{endFormatted}/g, formattedEnd)
+      .replace(/{magicLink}/g, "#")
+      .replace(/{protocolLink}/g, "#")
+      .replace(/{loginLink}/g, "#")
+      .replace(/{loginEmail}/g, "vlastnik@domena.sk")
+      .replace(/{rawPassword}/g, "h3S7o9xP")
+      .replace(/{unitNo}/g, "[Číslo bytu]")
+      .replace(/{dateFormatted}/g, "[Dátum a čas odovzdania]")
+      .replace(/{answersList}/g, answersListHtml);
+
+    const previewHtml = `
+      <div style="font-family: sans-serif; color: #1B2330; border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--paper); font-size: 13.5px; line-height: 1.5;">
+        ${bodyHtml
+          .replace(/<h2>/g, '<h2 style="font-family: var(--serif); color: var(--primary); margin-top: 0; font-size: 16px; font-weight: 600; border-bottom: 1.5px solid var(--line); padding-bottom: 6px;">')
+          .replace(/<\/h2>/g, '</h2>')
+          .replace(/<h3>/g, '<h3 style="margin-top: 0; color: var(--primary); font-size: 14px; font-weight: 600;">')
+          .replace(/<\/h3>/g, '</h3>')
+          .replace(/<div class="box">/g, '<div style="background: var(--paper-2); padding: 12px 14px; border-radius: 8px; border: 1px solid var(--line); margin: 12px 0;">')
+          .replace(/<a class="btn" href="([^"]+)">/g, '<span style="display: inline-block; background-color: var(--primary); color: #ffffff; padding: 8px 16px; border-radius: 6px; font-weight: bold; font-size: 11.5px; cursor: pointer;">')
+          .replace(/<\/a>/g, '</span>')
+          .replace(/<p class="note">/g, '<p style="font-size: 11px; color: var(--ink-soft); line-height: 1.4; margin: 8px 0 0;">')
+          .replace(/<p class="meta">/g, '<p style="margin: 0 0 4px; color: var(--ink-soft); font-size: 12px; line-height: 1.4;">')
+          .replace(/<p class="warn">/g, '<p style="font-size: 12px; color: #b91c1c; font-weight: 600; line-height: 1.5; background: #fee2e2; padding: 8px 10px; border-radius: 6px; margin: 12px 0;">')
+          .replace(/<code class="pass">/g, '<code style="font-family: monospace; font-size: 13.5px; color: #b91c1c; font-weight: bold; background: #fee2e2; padding: 2px 4px; border-radius: 4px;">')
+          .replace(/<p>/g, '<p style="font-size: 13px; line-height: 1.5; color: var(--ink); margin: 8px 0;">')}
+      </div>
+    `;
+
+    return {
+      subject: formattedSubject,
+      body: <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+    };
+  };
+
+  const emailCards = [
+    {
+      t: "Pozvánka na hlasovanie",
+      d: `Odoslané pri spustení — osobný link každému vlastníkovi`,
+      n: emailStats.eligibleEmailsCount,
+      s: "sent",
+      icon: "send" as const,
+      ...getEmailPreview("invitation", `Pozvánka na hlasovanie: ${poll.title}`, (
+        <div>
+          <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+          <p>v bytovom dome <strong>Björnsonova 3</strong> bolo vyhlásené elektronické hlasovanie:</p>
+          <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+            <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+            <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Dôvod:</strong> {poll.reason}</p>
+            <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Termín na hlasovanie:</strong> do {formattedEnd}</p>
+          </div>
+          <p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link):</p>
+          <div style={{ textAlign: "center", margin: "20px 0" }}>
+            <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+              👉 HLASOVAŤ ELEKTRONICKY
+            </span>
+          </div>
+          <p style={{ fontSize: "11px", color: "var(--ink-soft)", lineHeight: "1.4" }}>
+            Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť.
+          </p>
+        </div>
+      ))
+    },
+    {
+      t: "Pripomienka (48 h pred koncom)",
+      d: "Naplánované pred uzávierkou — odosiela sa iba nehlasujúcim",
+      n: emailStats.unvotedEmailsCount,
+      s: "scheduled",
+      icon: "clock" as const,
+      ...getEmailPreview("reminder", `UPOZORNENIE: Pripomienka k hlasovaniu: ${poll.title}`, (
+        <div>
+          <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+          <p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>Björnsonova 3</strong>, ktoré končí o 48 hodín:</p>
+          <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+            <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+            <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Koniec hlasovania:</strong> do {formattedEnd}</p>
+          </div>
+          <p>Ak ste doteraz neodovzdali svoj hlas, môžete tak urobiť kliknutím na odkaz nižšie:</p>
+          <div style={{ textAlign: "center", margin: "20px 0" }}>
+            <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+              👉 HLASOVAŤ ELEKTRONICKY
+            </span>
+          </div>
+        </div>
+      ))
+    },
+    {
+      t: "Potvrdenie prijatia hlasu",
+      d: "Odosiela sa automaticky po každom odoslaní hlasu",
+      n: emailStats.votedCount,
+      s: "auto",
+      icon: "checkCircle" as const,
+      ...getEmailPreview("confirmation", `Potvrdenie o hlasovaní: ${poll.title}`, (
+        <div>
+          <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+          <p>potvrdzujeme prijatie Vášho hlasu za byt/NP <strong>č. [Číslo bytu]</strong> v hlasovaní:</p>
+          <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+            <h4 style={{ margin: "0 0 10px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+            <p style={{ color: "var(--ink-soft)", fontSize: "12px", margin: "0 0 8px" }}>Prijaté dňa: [Dátum a čas odovzdania]</p>
+            <ul style={{ paddingLeft: "20px", margin: 0, fontSize: "12.5px" }}>
+              <li style={{ marginBottom: "6px" }}>
+                <strong>Otázka 1:</strong> [Text prvej otázky...] <br/>
+                Odpoveď: <span style={{ fontWeight: "bold", color: "var(--agree)" }}>Súhlasím</span>
+              </li>
+              <li>
+                <strong>Otázka 2:</strong> [Text druhej otázky...] <br/>
+                Odpoveď: <span style={{ fontWeight: "bold", color: "var(--disagree)" }}>Nesúhlasím</span>
+              </li>
+            </ul>
+          </div>
+          <p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu.</p>
+        </div>
+      ))
+    },
+    {
+      t: "Výsledok hlasovania",
+      d: "Odosiela sa po overení a uzavretí hlasovania administrátorom",
+      n: emailStats.eligibleEmailsCount,
+      s: poll.status === "closed" ? "sent" : "pending",
+      icon: "paper" as const,
+      ...getEmailPreview("protocol", `Výsledky hlasovania: ${poll.title}`, (
+        <div>
+          <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
+          <p>oznamujeme Vám, že elektronické hlasovanie bolo ukončené a výsledky boli oficiálne zapečatené:</p>
+          <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
+            <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
+            <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Stav:</strong> Uzavreté a overené</p>
+            <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Zápisnica (PDF):</strong> Súbor priložený v e-maile</p>
+          </div>
+          <p>Kompletnú zápisnicu o priebehu a výsledkoch si môžete stiahnuť aj priamo kliknutím na odkaz nižšie:</p>
+          <div style={{ textAlign: "center", margin: "20px 0" }}>
+            <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
+              Stiahnuť zápisnicu (PDF)
+            </span>
+          </div>
+        </div>
+      ))
+    }
+  ];
   const formattedAnnounced = new Date(poll.announcedAt).toLocaleDateString("sk-SK");
   const formattedStart = new Date(poll.startAt).toLocaleString("sk-SK", {
     day: "numeric",
@@ -851,126 +1023,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           </div>
           
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
-            {[
-              {
-                t: "Pozvánka na hlasovanie",
-                d: `Odoslané pri spustení — osobný link každému vlastníkovi`,
-                n: emailStats.eligibleEmailsCount,
-                s: "sent",
-                icon: "send",
-                subject: `Pozvánka na hlasovanie: ${poll.title}`,
-                body: (
-                  <div>
-                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-                    <p>v bytovom dome <strong>Björnsonova 3</strong> bolo vyhlásené elektronické hlasovanie:</p>
-                    
-                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
-                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
-                      <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Dôvod:</strong> {poll.reason}</p>
-                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Termín na hlasovanie:</strong> do {formattedEnd}</p>
-                    </div>
-
-                    <p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link):</p>
-                    
-                    <div style={{ textAlign: "center", margin: "20px 0" }}>
-                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
-                        👉 HLASOVAŤ ELEKTRONICKY
-                      </span>
-                    </div>
-
-                    <p style={{ fontSize: "11px", color: "var(--ink-soft)", lineHeight: "1.4" }}>
-                      Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť.
-                    </p>
-                  </div>
-                ),
-              },
-              {
-                t: "Pripomienka (48 h pred koncom)",
-                d: "Naplánované pred uzávierkou — odosiela sa iba nehlasujúcim",
-                n: emailStats.unvotedEmailsCount,
-                s: "scheduled",
-                icon: "clock",
-                subject: `UPOZORNENIE: Pripomienka k hlasovaniu: ${poll.title}`,
-                body: (
-                  <div>
-                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-                    <p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>Björnsonova 3</strong>, ktoré končí o 48 hodín:</p>
-                    
-                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
-                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
-                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Koniec hlasovania:</strong> do {formattedEnd}</p>
-                    </div>
-
-                    <p>Ak ste doteraz neodovzdali svoj hlas, môžete tak urobiť kliknutím na odkaz nižšie:</p>
-                    
-                    <div style={{ textAlign: "center", margin: "20px 0" }}>
-                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
-                        👉 HLASOVAŤ ELEKTRONICKY
-                      </span>
-                    </div>
-                  </div>
-                ),
-              },
-              {
-                t: "Potvrdenie prijatia hlasu",
-                d: "Odosiela sa automaticky po každom odoslaní hlasu",
-                n: emailStats.votedCount,
-                s: "auto",
-                icon: "checkCircle",
-                subject: `Potvrdenie o hlasovaní: ${poll.title}`,
-                body: (
-                  <div>
-                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-                    <p>potvrdzujeme prijatie Vášho hlasu za byt/NP <strong>č. [Číslo bytu]</strong> v hlasovaní:</p>
-
-                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
-                      <h4 style={{ margin: "0 0 10px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
-                      <p style={{ color: "var(--ink-soft)", fontSize: "12px", margin: "0 0 8px" }}>Prijaté dňa: [Dátum a čas odovzdania]</p>
-                      <ul style={{ paddingLeft: "20px", margin: 0, fontSize: "12.5px" }}>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Otázka 1:</strong> [Text prvej otázky...] <br/>
-                          Odpoveď: <span style={{ fontWeight: "bold", color: "var(--agree)" }}>Súhlasím</span>
-                        </li>
-                        <li>
-                          <strong>Otázka 2:</strong> [Text druhej otázky...] <br/>
-                          Odpoveď: <span style={{ fontWeight: "bold", color: "var(--disagree)" }}>Nesúhlasím</span>
-                        </li>
-                      </ul>
-                    </div>
-
-                    <p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu.</p>
-                  </div>
-                ),
-              },
-              {
-                t: "Výsledok hlasovania",
-                d: "Odosiela sa po overení a uzavretí hlasovania administrátorom",
-                n: emailStats.eligibleEmailsCount,
-                s: poll.status === "closed" ? "sent" : "pending",
-                icon: "paper",
-                subject: `Výsledky hlasovania: ${poll.title}`,
-                body: (
-                  <div>
-                    <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-                    <p>oznamujeme Vám, že elektronické hlasovanie bolo ukončené a výsledky boli oficiálne zapečatené:</p>
-
-                    <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
-                      <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
-                      <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Stav:</strong> Uzavreté a overené</p>
-                      <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Zápisnica (PDF):</strong> Súbor priložený v e-maile</p>
-                    </div>
-
-                    <p>Kompletnú zápisnicu o priebehu a výsledkoch si môžete stiahnuť aj priamo kliknutím na odkaz nižšie:</p>
-                    
-                    <div style={{ textAlign: "center", margin: "20px 0" }}>
-                      <span style={{ display: "inline-block", backgroundColor: "var(--primary)", color: "#ffffff", padding: "10px 20px", borderRadius: 6, fontWeight: "bold", fontSize: "12px" }}>
-                        Stiahnuť zápisnicu (PDF)
-                      </span>
-                    </div>
-                  </div>
-                ),
-              },
-            ].map((m, i) => {
+            {emailCards.map((m, i) => {
               const sTone: Record<string, string> = { sent: "success", scheduled: "primary", auto: "neutral", pending: "neutral" };
               const sLabel: Record<string, string> = { sent: "odoslané", scheduled: "naplánované", auto: "automatické", pending: "čaká" };
               const isExpanded = expandedEmailCard === i;

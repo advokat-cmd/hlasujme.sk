@@ -189,10 +189,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
 
   return (
     <div className="admin-page-container">
-      <PageHead eyebrow="Správa systému" title={activeTab === "questions" ? "Nastavenia šablón otázok" : "Nastavenia e-mailových šablón"}>
+      <PageHead eyebrow="Správa systému" title="Nastavenia systému">
         {activeTab === "questions" && (
           <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
-            Pridať šablónu
+            Pridať šablónu otázky
           </Btn>
         )}
       </PageHead>
@@ -324,6 +324,10 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                           ? "Výsledok hlasovania (Zápisnica)" 
                           : et.key === "credentials" 
                           ? "Prístupové údaje pre vlastníka" 
+                          : et.key === "reminder"
+                          ? "Pripomienka (48 h pred koncom)"
+                          : et.key === "confirmation"
+                          ? "Potvrdenie prijatia hlasu"
                           : et.key}
                       </h3>
                     </div>
@@ -531,6 +535,18 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                   { name: "{pollReason}", desc: "Dôvod vyhlásenia" },
                   { name: "{endFormatted}", desc: "Dátum a čas uzávierky" },
                   { name: "{magicLink}", desc: "Bezpečný odkaz na hlasovanie" },
+                ] : editingEmail.key === "reminder" ? [
+                  { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
+                  { name: "{buildingName}", desc: "Názov bytového domu" },
+                  { name: "{pollTitle}", desc: "Názov hlasovania" },
+                  { name: "{endFormatted}", desc: "Dátum a čas uzávierky" },
+                  { name: "{magicLink}", desc: "Bezpečný odkaz na hlasovanie" },
+                ] : editingEmail.key === "confirmation" ? [
+                  { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
+                  { name: "{unitNo}", desc: "Číslo bytu" },
+                  { name: "{pollTitle}", desc: "Názov hlasovania" },
+                  { name: "{dateFormatted}", desc: "Dátum a čas odovzdania" },
+                  { name: "{answersList}", desc: "Zoznam zaznamenaných odpovedí" },
                 ] : editingEmail.key === "protocol" ? [
                   { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
                   { name: "{buildingName}", desc: "Názov bytového domu" },

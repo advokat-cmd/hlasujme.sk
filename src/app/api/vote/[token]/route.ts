@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { VoteAnswer } from "@prisma/client";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { sendEmail, getConfirmationEmail } from "@/lib/email";
 
 export async function POST(
   request: Request,
@@ -134,6 +135,45 @@ export async function POST(
           sourceIp
         }
       );
+
+      // 4. Send Confirmation Email dynamically from DB template
+      const targetEmail = owner?.email || unit.email;
+      if (targetEmail && targetEmail.trim()) {
+        const answersSummary = poll.questions.map(q => {
+          const answer = answers[String(q.no)];
+          return {
+            qNo: q.no,
+            qTitle: q.title,
+            answerText: answer === "agree" ? "Súhlasím" : answer === "disagree" ? "Nesúhlasím" : answer === "abstain" ? "Zdržal sa" : "Nehlasoval"
+          };
+        });
+
+        const dateFormatted = new Date().toLocaleString("sk-SK", {
+          day: "numeric",
+          month: "numeric",
+          year: "numeric",
+          hour: "2-digit",
+          minute: "2-digit"
+        });
+
+        try {
+          const emailContent = await getConfirmationEmail({
+            ownerName: owner?.name || unit.actingPerson || "vlastník",
+            unitNo: unit.no,
+            pollTitle: poll.title,
+            dateFormatted,
+            answersSummary
+          });
+
+          await sendEmail({
+            to: targetEmail.trim(),
+            subject: emailContent.subject,
+            html: emailContent.html
+          });
+        } catch (emailErr) {
+          console.error("Failed to send vote confirmation email:", emailErr);
+        }
+      }
     }
 
     return NextResponse.json({ success: true });

@@ -30,6 +30,8 @@ export default async function AdminPollDetailPage({
     }
   });
 
+  const emailTemplates = await db.emailTemplate.findMany();
+
   if (!poll) {
     notFound();
   }
@@ -207,6 +209,7 @@ export default async function AdminPollDetailPage({
       unitVotesList={unitVotesList}
       emailStats={emailStats}
       userRole={session.role}
+      emailTemplates={emailTemplates.map(t => ({ key: t.key, subject: t.subject, body: t.body }))}
     />
   );
 }
