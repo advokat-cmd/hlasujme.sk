@@ -189,13 +189,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
 
   return (
     <div className="admin-page-container">
-      <PageHead eyebrow="Správa systému" title="Nastavenia systému">
-        {activeTab === "questions" && (
-          <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
-            Pridať šablónu otázky
-          </Btn>
-        )}
-      </PageHead>
+      <PageHead eyebrow="Správa systému" title="Nastavenia systému" />
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 0, marginBottom: 20, marginTop: 10 }}>
@@ -237,6 +231,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
 
       {activeTab === "questions" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {templates.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 4 }}>
+              <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
+                Pridať šablónu otázky
+              </Btn>
+            </div>
+          )}
+
           {templates.length > 0 ? (
             templates.map((t) => (
               <Card key={t.id} pad={20}>
@@ -282,12 +284,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
               </Card>
             ))
           ) : (
-            <Card style={{ padding: "40px 20px", textAlign: "center" }}>
-              <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
+            <Card style={{ padding: "45px 20px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 15 }}>
                 <Ic name="folder" size={24} style={{ color: "var(--ink-soft)" }} />
               </div>
               <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, margin: "0 0 6px" }}>Žiadne šablóny otázok</h3>
-              <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0 }}>Pridajte novú šablónu pomocou tlačidla vyššie.</p>
+              <p style={{ fontSize: 13.5, color: "var(--ink-soft)", marginBottom: 20 }}>Uľahčite si zadávanie otázok vytvorením vlastných šablón.</p>
+              <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
+                Pridať šablónu otázky
+              </Btn>
             </Card>
           )}
         </div>
