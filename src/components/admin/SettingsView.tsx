@@ -398,8 +398,9 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
       <PageHead eyebrow="Správa systému" title="Nastavenia systému" />
 
       {/* Tabs */}
-      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 0, marginBottom: 20, marginTop: 10 }}>
+      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 0, marginBottom: 20, marginTop: 10, position: "relative", zIndex: 2 }}>
         <button
+          type="button"
           onClick={() => setActiveTab("questions")}
           style={{
             background: "none",
@@ -417,6 +418,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
           Šablóny otázok
         </button>
         <button
+          type="button"
           onClick={() => setActiveTab("emails")}
           style={{
             background: "none",

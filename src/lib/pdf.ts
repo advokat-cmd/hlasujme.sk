@@ -111,8 +111,8 @@ export async function generateSealedPdf(pollId: string): Promise<Buffer> {
     doc.on("error", (err) => reject(err));
 
     // Try project-bundled Roboto fonts first (cross-platform / Vercel compatible)
-    let resolvedFont = path.join(process.cwd(), "src/assets/fonts/Roboto-Regular.ttf");
-    let resolvedFontBold = path.join(process.cwd(), "src/assets/fonts/Roboto-Bold.ttf");
+    let resolvedFont = path.join(process.cwd(), "public/fonts/Roboto-Regular.ttf");
+    let resolvedFontBold = path.join(process.cwd(), "public/fonts/Roboto-Bold.ttf");
 
     if (!fs.existsSync(resolvedFont)) {
       // Fallback to Windows system Arial if running locally on Windows

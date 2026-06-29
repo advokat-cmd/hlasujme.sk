@@ -3,25 +3,25 @@ import { Public_Sans, Spectral, Newsreader, Lora } from "next/font/google";
 import "./globals.css";
 
 const publicSans = Public_Sans({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans-google",
 });
 
 const spectral = Spectral({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["500", "600", "700"],
   variable: "--font-spectral-google",
 });
 
 const newsreader = Newsreader({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["500", "600"],
   variable: "--font-newsreader-google",
 });
 
 const lora = Lora({
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
   weight: ["500", "600"],
   variable: "--font-lora-google",
 });
