@@ -155,8 +155,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         alert(data.error || "Nepodarilo sa vymazať hlasovanie.");
       } else {
         alert("Hlasovanie bolo úspešne vymazané.");
-        router.push("/admin/poll/active");
-        router.refresh();
+        window.location.href = "/admin/poll/active";
       }
     } catch (err) {
       alert("Chyba pripojenia k sieti.");
