@@ -72,8 +72,16 @@ export async function POST(
     if (!fs.existsSync(storageDir)) {
       fs.mkdirSync(storageDir, { recursive: true });
     }
-    const relativePdfPath = `/storage/sealed/${pollId}_zapisnica.pdf`;
-    const absolutePdfPath = path.join(storageDir, `${pollId}_zapisnica.pdf`);
+
+    const dateToUse = new Date(poll.endAt < new Date() ? poll.endAt : new Date());
+    const year = dateToUse.getFullYear();
+    const month = String(dateToUse.getMonth() + 1).padStart(2, "0");
+    const day = String(dateToUse.getDate()).padStart(2, "0");
+    const formattedDate = `${year}-${month}-${day}`;
+    const fileName = `Zápisnica-z-hlasovania-${formattedDate}.pdf`;
+
+    const relativePdfPath = `/storage/sealed/${fileName}`;
+    const absolutePdfPath = path.join(storageDir, fileName);
     
     fs.writeFileSync(absolutePdfPath, pdfBuffer);
 
@@ -82,7 +90,7 @@ export async function POST(
       try {
         await uploadFileToDrive(
           poll.driveFolderId,
-          `${poll.title.replace(/[/\\?%*:|"<>\s]+/g, "_")}_zapisnica.pdf`,
+          fileName,
           "application/pdf",
           pdfBuffer
         );

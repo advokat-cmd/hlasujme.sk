@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { hashToken } from "@/lib/tokens";
-import { sendEmail, getInvitationEmailHtml } from "@/lib/email";
+import { sendEmail, getInvitationEmail } from "@/lib/email";
 import crypto from "crypto";
 import { createAuditLogEntry } from "@/lib/hashChain";
 
@@ -99,19 +99,19 @@ export async function POST(
     });
 
     const magicLink = `${baseUrl}/hlasuj/${plainToken}`;
-    const emailHtml = getInvitationEmailHtml(
+    const emailContent = await getInvitationEmail({
       ownerName,
-      poll.building.name,
-      poll.title,
-      poll.reason,
-      formattedEnd,
+      buildingName: poll.building.name,
+      pollTitle: poll.title,
+      pollReason: poll.reason,
+      endFormatted: formattedEnd,
       magicLink
-    );
+    });
 
     const sent = await sendEmail({
       to: email,
-      subject: `Pozvánka na hlasovanie: ${poll.title}`,
-      html: emailHtml
+      subject: emailContent.subject,
+      html: emailContent.html
     });
 
     if (!sent) {

@@ -29,6 +29,13 @@ interface Unit {
   coMode: string;
   email: string | null;
   actingPerson: string | null;
+  owners?: Array<{
+    id: string;
+    first: string;
+    last: string;
+    name: string;
+    role: string;
+  }>;
 }
 
 interface Poll {
@@ -54,7 +61,7 @@ interface VoterAppClientProps {
   poll: Poll;
   unit: Unit;
   owner: Owner | null;
-  building: { name: string; address: string } | null;
+  building: { name: string; address: string; short?: string | null } | null;
   initialAnswers: Record<number, VoteAnswer>;
   initialSubmittedAt: string | null;
 }
@@ -97,9 +104,27 @@ export function VoterAppClient({
     return () => window.removeEventListener("resize", checkViewport);
   }, []);
 
+  const saveVoteProgress = async (updatedAnswers: Record<number, VoteAnswer>) => {
+    try {
+      const res = await fetch(`/api/vote/${token}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers: updatedAnswers, finalize: false }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setSubmitError(data.error || "Nepodarilo sa priebežne uložiť hlas.");
+      }
+    } catch (err) {
+      setSubmitError("Chyba spojenia pri priebežnom ukladaní hlasu.");
+    }
+  };
+
   const setChoice = (no: number, val: VoteAnswer) => {
-    setAnswers((prev) => ({ ...prev, [no]: val }));
+    const nextAnswers = { ...answers, [no]: val };
+    setAnswers(nextAnswers);
     setSubmitError(null);
+    saveVoteProgress(nextAnswers);
   };
 
   const allAnswered = poll.questions.every((q) => answers[q.no]);
@@ -113,7 +138,7 @@ export function VoterAppClient({
       const res = await fetch(`/api/vote/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, finalize: true }),
       });
 
       const data = await res.json();
@@ -138,6 +163,8 @@ export function VoterAppClient({
 
   const voterName = owner
     ? owner.name
+    : unit.owners && unit.owners.length > 0
+    ? unit.owners.map((o) => `${o.first} ${o.last}`).join(", ")
     : unit.actingPerson || "Vlastník";
 
   const appContent = (
@@ -247,9 +274,13 @@ export function VoterAppClient({
 // ── Shared Header ─────────────────────────────────────────────
 interface VHeadProps {
   small?: boolean;
-  building: { name: string; address: string } | null;
+  building: { name: string; address: string; short?: string | null } | null;
 }
 function VHead({ small, building }: VHeadProps) {
+  const streetName = building
+    ? building.short || building.address.split(",")[0]
+    : "";
+
   return (
     <div
       style={{
@@ -258,23 +289,52 @@ function VHead({ small, building }: VHeadProps) {
         padding: small ? "52px 22px 16px" : "56px 22px 24px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 9, marginBottom: small ? 0 : 14 }}>
-        <div
-          style={{
-            width: 30,
-            height: 30,
-            borderRadius: 8,
-            background: "rgba(255,255,255,.15)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ic name="scale" size={17} style={{ color: "#fff" }} />
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: small ? 0 : 14,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              background: "rgba(255,255,255,.15)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ic name="scale" size={17} style={{ color: "#fff" }} />
+          </div>
+          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
+            Hlasovanie
+          </div>
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
-          Hlasovanie vlastníkov
-        </div>
+
+        {building && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,.85)", textAlign: "right" }}>
+              {streetName}
+            </span>
+            <img
+              src="/building.png"
+              alt="Bytový dom"
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 6,
+                objectFit: "cover",
+                background: "rgba(255,255,255,0.1)",
+              }}
+            />
+          </div>
+        )}
       </div>
       {!small && building && (
         <>

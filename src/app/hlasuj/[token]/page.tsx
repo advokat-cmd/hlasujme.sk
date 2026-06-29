@@ -69,7 +69,7 @@ export default async function VoterPage({ params }: PageProps) {
     );
   }
 
-  const { poll, unit, owner } = tokenInfo;
+  const { tokenRecord, poll, unit, owner } = tokenInfo;
 
   // Check if poll has not started yet
   const now = new Date();
@@ -119,7 +119,7 @@ export default async function VoterPage({ params }: PageProps) {
   // 2. Fetch building info
   const building = await db.building.findUnique({
     where: { id: unit.buildingId },
-    select: { name: true, address: true }
+    select: { name: true, address: true, short: true }
   });
 
   // 3. Fetch latest voting state
@@ -191,6 +191,13 @@ export default async function VoterPage({ params }: PageProps) {
     coMode: unit.coMode,
     email: unit.email,
     actingPerson: unit.actingPerson,
+    owners: unit.owners.map((o) => ({
+      id: o.id,
+      first: o.first,
+      last: o.last,
+      name: o.name,
+      role: o.role,
+    })),
   };
 
   const serializedOwner = owner
@@ -202,7 +209,7 @@ export default async function VoterPage({ params }: PageProps) {
       }
     : null;
 
-  const initialSubmittedAtFormatted = lastVoteDate ? formatSlovakDate(lastVoteDate) : null;
+  const initialSubmittedAtFormatted = tokenRecord.usedAt ? formatSlovakDate(tokenRecord.usedAt) : null;
 
   return (
     <VoterAppClient

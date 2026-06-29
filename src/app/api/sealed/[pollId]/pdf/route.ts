@@ -10,12 +10,6 @@ export async function GET(
   { params }: { params: Promise<{ pollId: string }> }
 ) {
   try {
-    // 1. Verify user is signed in (admin or owner/vlastnik)
-    const session = await getAdminSession();
-    if (!session) {
-      return NextResponse.json({ error: "Neprihlásený používateľ." }, { status: 401 });
-    }
-
     const { pollId } = await params;
 
     // 2. Fetch SealedResult record

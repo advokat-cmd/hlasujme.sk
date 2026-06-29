@@ -18,8 +18,15 @@ interface Template {
   note: string;
 }
 
+interface EmailTemplate {
+  key: string;
+  subject: string;
+  body: string;
+}
+
 interface SettingsViewProps {
   templates: Template[];
+  emailTemplates: EmailTemplate[];
 }
 
 const MAJORITY_LABELS: Record<string, string> = {
@@ -34,8 +41,9 @@ const MAJORITY_LABELS: Record<string, string> = {
   "half_present": "Nadpolovičná väčšina zúčastnených",
 };
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemplates }) => {
   const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"questions" | "emails">("questions");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
 
@@ -45,6 +53,65 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
   const [majorityType, setMajorityType] = useState("half-all");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  // Email template edit states
+  const [emailModalOpen, setEmailModalOpen] = useState(false);
+  const [editingEmail, setEditingEmail] = useState<EmailTemplate | null>(null);
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const handleCopy = (placeholder: string) => {
+    navigator.clipboard.writeText(placeholder);
+    setCopiedKey(placeholder);
+    setTimeout(() => {
+      setCopiedKey(null);
+    }, 1500);
+  };
+
+  const handleEmailSubmit = async () => {
+    if (!emailSubject.trim() || !emailBody.trim()) {
+      setEmailError("Predmet a telo e-mailu sú povinné.");
+      return;
+    }
+
+    setEmailLoading(true);
+    setEmailError("");
+
+    try {
+      const res = await fetch("/api/admin/email-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: editingEmail?.key,
+          subject: emailSubject.trim(),
+          body: emailBody,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailError(data.error || "Uloženie šablóny e-mailu zlyhalo.");
+      } else {
+        setEmailModalOpen(false);
+        router.refresh();
+      }
+    } catch (err) {
+      setEmailError("Chyba sieťového pripojenia.");
+    } finally {
+      setEmailLoading(false);
+    }
+  };
+
+  const handleOpenEditEmail = (et: EmailTemplate) => {
+    setEditingEmail(et);
+    setEmailSubject(et.subject);
+    setEmailBody(et.body);
+    setEmailError("");
+    setEmailModalOpen(true);
+  };
 
   const handleOpenAdd = () => {
     setTitle("");
@@ -122,67 +189,168 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
 
   return (
     <div className="admin-page-container">
-      <PageHead eyebrow="Správa systému" title="Nastavenia šablón otázok">
-        <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
-          Pridať šablónu
-        </Btn>
+      <PageHead eyebrow="Správa systému" title={activeTab === "questions" ? "Nastavenia šablón otázok" : "Nastavenia e-mailových šablón"}>
+        {activeTab === "questions" && (
+          <Btn kind="primary" icon="plus" onClick={handleOpenAdd}>
+            Pridať šablónu
+          </Btn>
+        )}
       </PageHead>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginTop: 10 }}>
-        {templates.length > 0 ? (
-          templates.map((t) => (
-            <Card key={t.id} pad={20}>
-              <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
-                <div
-                  style={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 9,
-                    background: "var(--primary-bg)",
-                    color: "var(--primary)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Ic name="doc" size={18} />
-                </div>
-                
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
-                    <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink)" }}>{t.title}</h3>
-                    <Pill tone="primary" size="sm">
-                      {MAJORITY_LABELS[t.majorityType] || t.majorityType}
-                    </Pill>
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 0, marginBottom: 20, marginTop: 10 }}>
+        <button
+          onClick={() => setActiveTab("questions")}
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: "14.5px",
+            fontWeight: 600,
+            color: activeTab === "questions" ? "var(--primary)" : "var(--ink-soft)",
+            borderBottom: activeTab === "questions" ? "3px solid var(--primary)" : "3px solid transparent",
+            padding: "10px 16px",
+            cursor: "pointer",
+            marginBottom: -2,
+            transition: "all 0.15s"
+          }}
+        >
+          Šablóny otázok
+        </button>
+        <button
+          onClick={() => setActiveTab("emails")}
+          style={{
+            background: "none",
+            border: "none",
+            fontSize: "14.5px",
+            fontWeight: 600,
+            color: activeTab === "emails" ? "var(--primary)" : "var(--ink-soft)",
+            borderBottom: activeTab === "emails" ? "3px solid var(--primary)" : "3px solid transparent",
+            padding: "10px 16px",
+            cursor: "pointer",
+            marginBottom: -2,
+            transition: "all 0.15s"
+          }}
+        >
+          E-mailové šablóny
+        </button>
+      </div>
+
+      {activeTab === "questions" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {templates.length > 0 ? (
+            templates.map((t) => (
+              <Card key={t.id} pad={20}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 9,
+                      background: "var(--primary-bg)",
+                      color: "var(--primary)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Ic name="doc" size={18} />
                   </div>
                   
-                  <p style={{ margin: "0 0 10px", fontSize: "13.5px", color: "var(--ink-soft)", lineHeight: 1.5 }}>
-                    <strong>Návrh uznesenia:</strong> {t.text}
-                  </p>
-                </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink)" }}>{t.title}</h3>
+                      <Pill tone="primary" size="sm">
+                        {MAJORITY_LABELS[t.majorityType] || t.majorityType}
+                      </Pill>
+                    </div>
+                    
+                    <p style={{ margin: "0 0 10px", fontSize: "13.5px", color: "var(--ink-soft)", lineHeight: 1.5 }}>
+                      <strong>Návrh uznesenia:</strong> {t.text}
+                    </p>
+                  </div>
 
-                <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                  <Btn kind="secondary" size="sm" icon="edit" onClick={() => handleOpenEdit(t)}>
-                    Upraviť
-                  </Btn>
-                  <Btn kind="ghost" size="sm" icon="x" style={{ color: "var(--disagree)" }} onClick={() => handleDelete(t.id, t.title)}>
-                    Zmazať
-                  </Btn>
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <Btn kind="secondary" size="sm" icon="edit" onClick={() => handleOpenEdit(t)}>
+                      Upraviť
+                    </Btn>
+                    <Btn kind="ghost" size="sm" icon="x" style={{ color: "var(--disagree)" }} onClick={() => handleDelete(t.id, t.title)}>
+                      Zmazať
+                    </Btn>
+                  </div>
                 </div>
+              </Card>
+            ))
+          ) : (
+            <Card style={{ padding: "40px 20px", textAlign: "center" }}>
+              <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
+                <Ic name="folder" size={24} style={{ color: "var(--ink-soft)" }} />
               </div>
+              <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, margin: "0 0 6px" }}>Žiadne šablóny otázok</h3>
+              <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0 }}>Pridajte novú šablónu pomocou tlačidla vyššie.</p>
             </Card>
-          ))
-        ) : (
-          <Card style={{ padding: "40px 20px", textAlign: "center" }}>
-            <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
-              <Ic name="folder" size={24} style={{ color: "var(--ink-soft)" }} />
-            </div>
-            <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, margin: "0 0 6px" }}>Žiadne šablóny otázok</h3>
-            <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0 }}>Pridajte novú šablónu pomocou tlačidla vyššie.</p>
-          </Card>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === "emails" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {emailTemplates && emailTemplates.length > 0 ? (
+            emailTemplates.map((et) => (
+              <Card key={et.key} pad={20}>
+                <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 9,
+                      background: "var(--primary-bg)",
+                      color: "var(--primary)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Ic name="mail" size={18} />
+                  </div>
+                  
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 6 }}>
+                      <h3 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: "var(--ink)" }}>
+                        {et.key === "invitation" 
+                          ? "Pozvánka na hlasovanie (Magic Link)" 
+                          : et.key === "protocol" 
+                          ? "Výsledok hlasovania (Zápisnica)" 
+                          : et.key === "credentials" 
+                          ? "Prístupové údaje pre vlastníka" 
+                          : et.key}
+                      </h3>
+                    </div>
+                    
+                    <p style={{ margin: "0 0 6px", fontSize: "13.5px", color: "var(--ink)", lineHeight: 1.5 }}>
+                      <strong>Predmet:</strong> {et.subject}
+                    </p>
+                    <p style={{ margin: 0, fontSize: "12.5px", color: "var(--ink-soft)", textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: 650 }}>
+                      <strong>Telo e-mailu:</strong> {et.body.replace(/<[^>]*>/g, '').slice(0, 120)}...
+                    </p>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                    <Btn kind="secondary" size="sm" icon="edit" onClick={() => handleOpenEditEmail(et)}>
+                      Upraviť šablónu
+                    </Btn>
+                  </div>
+                </div>
+              </Card>
+            ))
+          ) : (
+            <Card style={{ padding: "40px 20px", textAlign: "center" }}>
+              <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, margin: "0 0 6px" }}>Žiadne e-mailové šablóny</h3>
+            </Card>
+          )}
+        </div>
+      )}
 
       {modalOpen && (
         <Modal
@@ -270,6 +438,163 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates }) => {
               <option value="half-present">Nadpolovičná väčšina zúčastnených (Po hodine čakania na schôdzi)</option>
             </select>
           </FormRow>
+        </Modal>
+      )}
+
+      {emailModalOpen && editingEmail && (
+        <Modal
+          title="Upraviť e-mailovú šablónu"
+          subtitle="Upravte predmet a telo e-mailu. Použite premenné z pravého panela."
+          icon="mail"
+          width={800}
+          onClose={() => setEmailModalOpen(false)}
+          footer={
+            <>
+              <Btn kind="secondary" onClick={() => setEmailModalOpen(false)} disabled={emailLoading}>
+                Zrušiť
+              </Btn>
+              <Btn kind="primary" icon="check" onClick={handleEmailSubmit} disabled={emailLoading}>
+                {emailLoading ? "Ukladám..." : "Uložiť šablónu"}
+              </Btn>
+            </>
+          }
+        >
+          {emailError && (
+            <div style={{ color: "var(--disagree)", display: "flex", alignItems: "center", gap: 6, fontSize: "13px", marginBottom: 15 }}>
+              <Ic name="alert" size={16} />
+              {emailError}
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 20 }}>
+            {/* Editor form */}
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 15 }}>
+              <FormRow label="Predmet e-mailu" hint="Môžete použiť premenné ako {pollTitle}">
+                <Input
+                  value={emailSubject}
+                  onChange={(e) => {
+                    setEmailSubject(e.target.value);
+                    setEmailError("");
+                  }}
+                  placeholder="Zadajte predmet e-mailu"
+                  required
+                />
+              </FormRow>
+
+              <FormRow label="Telo e-mailu (HTML šablóna)" hint="Môžete používať premenné z pravého panela.">
+                <textarea
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "10px 13px",
+                    borderRadius: 9,
+                    border: "1px solid var(--line)",
+                    fontFamily: "monospace",
+                    fontSize: "12.5px",
+                    background: "var(--paper)",
+                    color: "var(--ink)",
+                    minHeight: 280,
+                    resize: "vertical",
+                    lineHeight: 1.5,
+                  }}
+                  placeholder="Telo e-mailu v HTML..."
+                  value={emailBody}
+                  onChange={(e) => {
+                    setEmailBody(e.target.value);
+                    setEmailError("");
+                  }}
+                  required
+                />
+              </FormRow>
+            </div>
+
+            {/* Sidebar with copyable variables */}
+            <div
+              style={{
+                width: 250,
+                borderLeft: "1px solid var(--line)",
+                paddingLeft: 16,
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, margin: "0 0 4px", color: "var(--ink-soft)" }}>
+                Premenné šablóny
+              </h4>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {(editingEmail.key === "invitation" ? [
+                  { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
+                  { name: "{buildingName}", desc: "Názov bytového domu" },
+                  { name: "{pollTitle}", desc: "Názov hlasovania" },
+                  { name: "{pollReason}", desc: "Dôvod vyhlásenia" },
+                  { name: "{endFormatted}", desc: "Dátum a čas uzávierky" },
+                  { name: "{magicLink}", desc: "Bezpečný odkaz na hlasovanie" },
+                ] : editingEmail.key === "protocol" ? [
+                  { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
+                  { name: "{buildingName}", desc: "Názov bytového domu" },
+                  { name: "{pollTitle}", desc: "Názov hlasovania" },
+                  { name: "{protocolLink}", desc: "Odkaz na zápisnicu PDF (nevyžaduje prihlásenie)" },
+                ] : [
+                  { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
+                  { name: "{buildingName}", desc: "Názov bytového domu" },
+                  { name: "{buildingShort}", desc: "Skrátený názov bytového domu" },
+                  { name: "{loginLink}", desc: "Odkaz na prihlasovaciu stránku" },
+                  { name: "{loginEmail}", desc: "Prihlasovací e-mail vlastníka" },
+                  { name: "{rawPassword}", desc: "Generované heslo vlastníka" },
+                ]).map((v) => {
+                  const copied = copiedKey === v.name;
+                  return (
+                    <div
+                      key={v.name}
+                      style={{
+                        padding: 8,
+                        borderRadius: 8,
+                        background: "var(--paper-2)",
+                        border: "1px solid var(--line)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 6,
+                          marginBottom: 4,
+                        }}
+                      >
+                        <code style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", fontFamily: "monospace" }}>
+                          {v.name}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(v.name)}
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: "3px 6px",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            background: copied ? "var(--agree)" : "var(--primary)",
+                            color: "#fff",
+                            border: "none",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 3,
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          {copied ? "Kopírované" : "Kopírovať"}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{v.desc}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </Modal>
       )}
     </div>

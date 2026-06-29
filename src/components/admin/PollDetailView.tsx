@@ -19,6 +19,12 @@ const extractDriveFileId = (url: string): string | null => {
   return match ? match[1] : null;
 };
 
+interface ProtocolEmailLog {
+  id: string;
+  email: string;
+  sentAt: string;
+}
+
 interface PollDetailViewProps {
   poll: {
     id: string;
@@ -33,6 +39,7 @@ interface PollDetailViewProps {
       pdfPath: string;
       sha256: string;
     } | null;
+    protocolEmailLogs?: ProtocolEmailLog[];
   };
   questions: Array<{
     id: string;
@@ -102,6 +109,34 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       }
     }
   }, []);
+
+  const [sendingProtocol, setSendingProtocol] = useState(false);
+  const [protocolError, setProtocolError] = useState("");
+  const [protocolSuccess, setProtocolSuccess] = useState("");
+
+  const handleSendProtocolToOwners = async () => {
+    setSendingProtocol(true);
+    setProtocolError("");
+    setProtocolSuccess("");
+
+    try {
+      const res = await fetch(`/api/admin/poll/${poll.id}/send-protocol`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setProtocolError(data.error || "Nepodarilo sa odoslať zápisnicu.");
+      } else {
+        setProtocolSuccess(`Zápisnica bola úspešne odoslaná ${data.successCount} vlastníkom.`);
+        router.refresh();
+      }
+    } catch (err) {
+      setProtocolError("Chyba sieťového pripojenia.");
+    } finally {
+      setSendingProtocol(false);
+    }
+  };
 
   const handleTabChange = (newTab: string) => {
     setTab(newTab);
@@ -1337,18 +1372,85 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     Hlasovanie bolo uzavreté a výsledky sú zapečatené
                   </h3>
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
-                    Zápisnica bola úspešne vygenerovaná a odoslaná každému vlastníkovi mailom (ako link na stiahnutie).
+                    Zápisnica bola úspešne vygenerovaná. Môžete ju stiahnuť nižšie alebo odoslať odkaz na stiahnutie všetkým vlastníkom.
                   </p>
+                  
+                  {protocolError && (
+                    <div style={{ color: "var(--disagree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Ic name="alert" size={14} />
+                      {protocolError}
+                    </div>
+                  )}
+
+                  {protocolSuccess && (
+                    <div style={{ color: "var(--agree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Ic name="checkCircle" size={14} />
+                      {protocolSuccess}
+                    </div>
+                  )}
                 </div>
-                {poll.sealedResult && (
-                  <a href={`/api/sealed/${poll.id}/pdf`} style={{ textDecoration: "none" }}>
-                    <Btn kind="primary" icon="download">
-                      Stiahnuť zápisnicu PDF
-                    </Btn>
-                  </a>
-                )}
+                
+                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                  {poll.sealedResult && (
+                    <a href={`/api/sealed/${poll.id}/pdf`} style={{ textDecoration: "none" }}>
+                      <Btn kind="secondary" icon="download">
+                        Stiahnuť zápisnicu PDF
+                      </Btn>
+                    </a>
+                  )}
+                  <Btn
+                    kind="primary"
+                    icon="send"
+                    disabled={sendingProtocol}
+                    onClick={handleSendProtocolToOwners}
+                  >
+                    {sendingProtocol ? "Odosielam..." : "Odoslať vlastníkom"}
+                  </Btn>
+                </div>
               </div>
             </Card>
+          )}
+
+          {/* Sent Protocol Email Logs */}
+          {poll.status === "closed" && (
+            <div style={{ marginTop: 24, marginBottom: 24 }}>
+              <h4 style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 600, margin: "0 0 10px", color: "var(--ink)" }}>
+                História odoslania zápisnice
+              </h4>
+              {poll.protocolEmailLogs && poll.protocolEmailLogs.length > 0 ? (
+                <Card style={{ padding: 0 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid var(--line)", background: "var(--paper-2)", textAlign: "left" }}>
+                        <th style={{ padding: "10px 14px", fontWeight: 600, color: "var(--ink-soft)" }}>E-mailová adresa</th>
+                        <th style={{ padding: "10px 14px", fontWeight: 600, color: "var(--ink-soft)" }}>Čas odoslania</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {poll.protocolEmailLogs.map((log) => (
+                        <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }}>
+                          <td style={{ padding: "10px 14px", color: "var(--ink)", fontWeight: 500 }}>{log.email}</td>
+                          <td style={{ padding: "10px 14px", color: "var(--ink-soft)" }}>
+                            {new Date(log.sentAt).toLocaleString("sk-SK", {
+                              day: "numeric",
+                              month: "numeric",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              second: "2-digit"
+                            })}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Card>
+              ) : (
+                <div style={{ fontSize: "13px", color: "var(--ink-soft)", background: "var(--paper)", padding: "12px 14px", borderRadius: 8, border: "1px dashed var(--line)" }}>
+                  Odkaz na zápisnicu zatiaľ nebol odoslaný žiadnemu vlastníkovi.
+                </div>
+              )}
+            </div>
           )}
 
           <div

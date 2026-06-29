@@ -3,7 +3,7 @@ import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { PollStatus, MajorityType } from "@prisma/client";
 import { generateVoteTokens } from "@/lib/tokens";
-import { sendEmail, getInvitationEmailHtml } from "@/lib/email";
+import { sendEmail, getInvitationEmail } from "@/lib/email";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import { createDriveFolder } from "@/lib/gdrive";
 
@@ -86,26 +86,28 @@ export async function POST(request: Request) {
     });
 
     // Non-blocking email sending
-    const emailPromises = tokensInfo.map(info => {
-      const magicLink = `${baseUrl}/hlasuj/${info.token}`;
-      const emailHtml = getInvitationEmailHtml(
-        info.ownerName || "vlastník",
-        building.name,
-        newPoll.title,
-        newPoll.reason,
-        formattedEnd,
-        magicLink
-      );
-      
-      return sendEmail({
-        to: info.email,
-        subject: `Pozvánka na hlasovanie: ${newPoll.title}`,
-        html: emailHtml
+    const sendEmailsAsync = async () => {
+      const emailPromises = tokensInfo.map(async info => {
+        const magicLink = `${baseUrl}/hlasuj/${info.token}`;
+        const emailContent = await getInvitationEmail({
+          ownerName: info.ownerName || "vlastník",
+          buildingName: building.name,
+          pollTitle: newPoll.title,
+          pollReason: newPoll.reason,
+          endFormatted: formattedEnd,
+          magicLink
+        });
+        
+        return sendEmail({
+          to: info.email,
+          subject: emailContent.subject,
+          html: emailContent.html
+        });
       });
-    });
+      await Promise.all(emailPromises);
+    };
 
-    // Run emails concurrently (errors caught inside helper)
-    Promise.all(emailPromises).catch(err => {
+    sendEmailsAsync().catch(err => {
       console.error("Error in background email dispatch:", err);
     });
 

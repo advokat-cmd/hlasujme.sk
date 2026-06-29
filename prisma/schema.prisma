@@ -114,6 +114,13 @@ model QuestionTemplate {
   updatedAt    DateTime @updatedAt
 }
 
+model EmailTemplate {
+  key       String   @id
+  subject   String
+  body      String   @db.Text
+  updatedAt DateTime @updatedAt
+}
+
 enum PollStatus {
   draft
   active
@@ -136,11 +143,12 @@ model Poll {
   buildingId   String
   building     Building     @relation(fields: [buildingId], references: [id], onDelete: Cascade)
 
-  questions    Question[]
-  voteTokens   VoteToken[]
-  votes        Vote[]
-  subvotes     CoownerSubvote[]
-  sealedResult SealedResult?
+  questions         Question[]
+  voteTokens        VoteToken[]
+  votes             Vote[]
+  subvotes          CoownerSubvote[]
+  sealedResult      SealedResult?
+  protocolEmailLogs ProtocolEmailLog[]
 }
 
 enum MajorityType {
@@ -241,4 +249,12 @@ model SealedResult {
   sha256     String   // Hash of results data
   sealedAt   DateTime @default(now())
   pdfPath    String   // Path to PDF file on server
+}
+
+model ProtocolEmailLog {
+  id        String   @id @default(uuid())
+  pollId    String
+  poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  email     String
+  sentAt    DateTime @default(now())
 }

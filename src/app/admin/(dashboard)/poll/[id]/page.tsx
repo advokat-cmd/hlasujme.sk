@@ -25,7 +25,8 @@ export default async function AdminPollDetailPage({
     where: { id: pollId },
     include: {
       questions: { orderBy: { no: "asc" } },
-      sealedResult: true
+      sealedResult: true,
+      protocolEmailLogs: { orderBy: { sentAt: "desc" } }
     }
   });
 
@@ -195,7 +196,12 @@ export default async function AdminPollDetailPage({
         sealedResult: poll.sealedResult ? {
           pdfPath: poll.sealedResult.pdfPath,
           sha256: poll.sealedResult.sha256
-        } : null
+        } : null,
+        protocolEmailLogs: poll.protocolEmailLogs.map(l => ({
+          id: l.id,
+          email: l.email,
+          sentAt: l.sentAt.toISOString()
+        }))
       }}
       questions={questionsTallies}
       unitVotesList={unitVotesList}

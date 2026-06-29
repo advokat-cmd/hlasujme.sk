@@ -26,7 +26,7 @@ export async function GET(
           include: { questions: { orderBy: { no: "asc" } } }
         },
         unit: {
-          include: { owners: true }
+          include: { owners: true, building: true }
         }
       }
     });
@@ -89,7 +89,9 @@ export async function GET(
       return NextResponse.json({ error: "Zatiaľ nebol odoslaný žiadny hlas pre tento odkaz." }, { status: 400 });
     }
 
-    const voterName = owner ? owner.name : (unit.actingPerson || unit.owners[0]?.name || "Vlastník");
+    const voterName = owner
+      ? owner.name
+      : (unit.actingPerson || (unit.owners.length > 0 ? unit.owners.map(o => o.name).join(", ") : "Vlastník"));
 
     // 3. Generate PDF receipt
     const pdfBuffer = await new Promise<Buffer>((resolve, reject) => {
@@ -128,7 +130,7 @@ export async function GET(
 
       // Metadata box
       doc.fontSize(10);
-      doc.text("Bytový dom: ", { continued: true }).text(bold("Björnsonova 3, Bratislava")); regular();
+      doc.text("Bytový dom: ", { continued: true }).text(bold(`${unit.building.name}, ${unit.building.address}`)); regular();
       doc.text("Jednotka: ", { continued: true }).text(bold(`Byt č. ${unit.no}`)); regular();
       doc.text("Hlasujúci: ", { continued: true }).text(bold(voterName)); regular();
       
@@ -195,7 +197,7 @@ export async function GET(
 
     const fileName = `potvrdenie_hlasovania_byt_${unit.no}.pdf`;
 
-    return new NextResponse(new Uint8Array(pdfBuffer), {
+    return new Response(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${fileName}"`

@@ -22,7 +22,7 @@ export async function POST(
 
     const { token } = await params;
     const body = await request.json();
-    const { answers } = body as { answers: Record<string, VoteAnswer> };
+    const { answers, finalize = false } = body as { answers: Record<string, VoteAnswer>; finalize?: boolean };
 
     if (!answers || typeof answers !== "object") {
       return NextResponse.json({ error: "Chybné údaje odpovedí." }, { status: 400 });
@@ -36,19 +36,21 @@ export async function POST(
 
     const { tokenRecord, poll, unit, owner } = tokenInfo;
 
-    // Check that all questions in the poll are answered
-    const unanswered = poll.questions.filter(q => !answers[String(q.no)]);
-    if (unanswered.length > 0) {
-      return NextResponse.json({
-        error: `Nezodpovedané otázky: ${unanswered.map(q => q.no).join(", ")}`
-      }, { status: 400 });
+    if (finalize) {
+      // Check that all questions in the poll are answered
+      const unanswered = poll.questions.filter(q => !answers[String(q.no)]);
+      if (unanswered.length > 0) {
+        return NextResponse.json({
+          error: `Nezodpovedané otázky: ${unanswered.map(q => q.no).join(", ")}`
+        }, { status: 400 });
+      }
     }
-
 
     // 2. Perform votes insertion inside a database transaction to ensure versioning integrity
     await db.$transaction(async (tx) => {
       for (const q of poll.questions) {
         const answer = answers[String(q.no)];
+        if (!answer) continue;
 
         if (owner) {
           // Co-owner sub-vote
@@ -62,20 +64,22 @@ export async function POST(
             orderBy: { version: "desc" }
           });
 
-          const nextVersion = latestSubvote ? latestSubvote.version + 1 : 1;
+          if (!latestSubvote || latestSubvote.answer !== answer) {
+            const nextVersion = latestSubvote ? latestSubvote.version + 1 : 1;
 
-          await tx.coownerSubvote.create({
-            data: {
-              pollId: poll.id,
-              unitId: unit.id,
-              ownerId: owner.id,
-              questionNo: q.no,
-              answer,
-              version: nextVersion,
-              sourceIp,
-              tokenId: tokenRecord.id
-            }
-          });
+            await tx.coownerSubvote.create({
+              data: {
+                pollId: poll.id,
+                unitId: unit.id,
+                ownerId: owner.id,
+                questionNo: q.no,
+                answer,
+                version: nextVersion,
+                sourceIp,
+                tokenId: tokenRecord.id
+              }
+            });
+          }
         } else {
           // Unit vote
           const latestVote = await tx.vote.findFirst({
@@ -87,45 +91,50 @@ export async function POST(
             orderBy: { version: "desc" }
           });
 
-          const nextVersion = latestVote ? latestVote.version + 1 : 1;
+          if (!latestVote || latestVote.answer !== answer) {
+            const nextVersion = latestVote ? latestVote.version + 1 : 1;
 
-          await tx.vote.create({
-            data: {
-              pollId: poll.id,
-              unitId: unit.id,
-              questionNo: q.no,
-              answer,
-              version: nextVersion,
-              sourceIp,
-              tokenId: tokenRecord.id
-            }
-          });
+            await tx.vote.create({
+              data: {
+                pollId: poll.id,
+                unitId: unit.id,
+                questionNo: q.no,
+                answer,
+                version: nextVersion,
+                sourceIp,
+                tokenId: tokenRecord.id
+              }
+            });
+          }
         }
       }
 
-      // Mark token as used (optional since it can be used again to change votes,
-      // but let's record usedAt update to log the latest activity time)
-      await tx.voteToken.update({
-        where: { id: tokenRecord.id },
-        data: { usedAt: new Date() }
-      });
+      if (finalize) {
+        // Mark token as used
+        await tx.voteToken.update({
+          where: { id: tokenRecord.id },
+          data: { usedAt: new Date() }
+        });
+      }
     });
 
-    // 3. Log to audit chain (outside the transaction, so if transaction commits, log is registered)
-    const actorName = owner ? `${unit.no}/${owner.name}` : `${unit.no}/${unit.actingPerson || unit.owners[0]?.name || "Vlastník"}`;
-    await createAuditLogEntry(
-      "VOTE_CAST",
-      `voter:${actorName}`,
-      {
-        message: `Hlasovanie odoslané vlastníkom pre byt č. ${unit.no}`,
-        unitNo: unit.no,
-        ownerName: owner?.name || null,
-        coMode: unit.coMode,
-        questions: Object.keys(answers).map(Number),
-        answers,
-        sourceIp
-      }
-    );
+    if (finalize) {
+      // 3. Log to audit chain (outside the transaction, so if transaction commits, log is registered)
+      const actorName = owner ? `${unit.no}/${owner.name}` : `${unit.no}/${unit.actingPerson || (unit.owners.length > 0 ? unit.owners.map(o => o.name).join(", ") : "Vlastník")}`;
+      await createAuditLogEntry(
+        "VOTE_CAST",
+        `voter:${actorName}`,
+        {
+          message: `Hlasovanie odoslané vlastníkom pre byt č. ${unit.no}`,
+          unitNo: unit.no,
+          ownerName: owner?.name || null,
+          coMode: unit.coMode,
+          questions: Object.keys(answers).map(Number),
+          answers,
+          sourceIp
+        }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {
