@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Ic } from "../ui/Icons";
 import { Card } from "../ui/Card";
@@ -9,6 +9,7 @@ import { Pill } from "../ui/Pill";
 import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
+import { EmailTemplateEditor, DEFAULT_EMAIL_TEMPLATES } from "./EmailTemplateEditor";
 
 interface Template {
   id: string;
@@ -77,22 +78,49 @@ const convertHtmlToPlainText = (html: string): string => {
 const convertPlainTextToHtml = (key: string, text: string): string => {
   if (!text) return "";
   
-  const paragraphs = text
-    .replace(/\r/g, "")
-    .trim()
-    .split(/\n\n+/);
-    
-  let html = "";
+  const normalized = text.replace(/\r/g, "").trim();
+  const firstNewlineIdx = normalized.indexOf("\n");
   
-  paragraphs.forEach((p, idx) => {
+  let heading = "";
+  let restText = "";
+  
+  if (firstNewlineIdx === -1) {
+    const knownHeaders = [
+      "Výsledok hlasovania",
+      "Pozvánka na elektronické hlasovanie",
+      "Prihlasovacie údaje k hlasovaciemu systému",
+      "Pripomienka k elektronickému hlasovaniu",
+      "Potvrdenie o hlasovaní"
+    ];
+    
+    let matchedHeader = "";
+    for (const header of knownHeaders) {
+      if (normalized.startsWith(header)) {
+        matchedHeader = header;
+        break;
+      }
+    }
+    
+    if (matchedHeader && normalized.length > matchedHeader.length) {
+      heading = matchedHeader;
+      restText = normalized.slice(matchedHeader.length).trim();
+    } else {
+      heading = normalized;
+    }
+  } else {
+    heading = normalized.slice(0, firstNewlineIdx).trim();
+    restText = normalized.slice(firstNewlineIdx).trim();
+  }
+  
+  let html = `<h2>${heading}</h2>\n`;
+  
+  if (!restText) return html.trim();
+  
+  const paragraphs = restText.split(/\n\n+/);
+  
+  paragraphs.forEach((p) => {
     p = p.trim();
     if (!p) return;
-    
-    // Paragraph 1: h2 heading
-    if (idx === 0) {
-      html += `<h2>${p}</h2>\n`;
-      return;
-    }
     
     // Check for button text
     if (p === "👉 HLASOVAŤ ELEKTRONICKY") {
@@ -176,11 +204,8 @@ const convertPlainTextToHtml = (key: string, text: string): string => {
   return html.trim();
 };
 
-const generateEmailPreviewHtml = (key: string, subject: string, bodyText: string): { subject: string; bodyHtml: string } => {
-  // 1. Convert plain text to clean HTML
-  let bodyHtml = convertPlainTextToHtml(key, bodyText);
-  
-  // 2. Replace variables with realistic mock values
+const generateEmailPreviewHtml = (key: string, subject: string, bodyHtml: string): { subject: string; bodyHtml: string } => {
+  // 1. Replace variables with realistic mock values
   const mockValues: Record<string, string> = {
     "{ownerName}": "Ján Novák",
     "{buildingName}": "Bytový dom Björnsonova 3",
@@ -208,13 +233,14 @@ const generateEmailPreviewHtml = (key: string, subject: string, bodyText: string
   };
   
   let previewSubject = subject;
+  let parsedHtml = bodyHtml;
   Object.entries(mockValues).forEach(([placeholder, value]) => {
     previewSubject = previewSubject.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
-    bodyHtml = bodyHtml.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
+    parsedHtml = parsedHtml.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
   });
   
-  // 3. Apply the exact inline styles from email.ts applyEmailStyles
-  let styled = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA; text-align: left; box-sizing: border-box;">${bodyHtml}</div>`;
+  // 2. Apply the exact inline styles from email.ts applyEmailStyles
+  let styled = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA; text-align: left; box-sizing: border-box;">${parsedHtml}</div>`;
   
   styled = styled
     .replace(/<h2>/g, '<h2 style="font-family: Georgia, serif; color: #1F3A5F; margin-top: 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #1F3A5F; padding-bottom: 8px; line-height: 1.3;">')
@@ -266,6 +292,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
   const [emailLoading, setEmailLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [emailModalTab, setEmailModalTab] = useState<"edit" | "preview">("edit");
+  const onInsertRef = useRef<((text: string) => void) | null>(null);
 
   const handleCopy = (placeholder: string) => {
     navigator.clipboard.writeText(placeholder);
@@ -285,14 +312,13 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
     setEmailError("");
 
     try {
-      const convertedBody = convertPlainTextToHtml(editingEmail?.key || "", emailBody);
       const res = await fetch("/api/admin/email-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: editingEmail?.key,
           subject: emailSubject.trim(),
-          body: convertedBody,
+          body: emailBody.trim(),
         }),
       });
 
@@ -313,7 +339,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
   const handleOpenEditEmail = (et: EmailTemplate) => {
     setEditingEmail(et);
     setEmailSubject(et.subject);
-    setEmailBody(convertHtmlToPlainText(et.body));
+    setEmailBody(et.body);
     setEmailError("");
     setEmailModalTab("edit");
     setEmailModalOpen(true);
@@ -740,28 +766,27 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                 </FormRow>
 
                 <FormRow label="Telo e-mailu" hint="Môžete používať premenné z pravého panela.">
-                  <textarea
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "10px 13px",
-                      borderRadius: 9,
-                      border: "1px solid var(--line)",
-                      fontFamily: "inherit",
-                      fontSize: "13.5px",
-                      background: "var(--paper)",
-                      color: "var(--ink)",
-                      minHeight: 280,
-                      resize: "vertical",
-                      lineHeight: 1.5,
-                    }}
-                    placeholder="Sem napíšte text e-mailu..."
+                  <EmailTemplateEditor
                     value={emailBody}
-                    onChange={(e) => {
-                      setEmailBody(e.target.value);
+                    onChange={(val) => {
+                      setEmailBody(val);
                       setEmailError("");
                     }}
-                    required
+                    onInsertRef={onInsertRef}
+                    templateKey={editingEmail.key}
+                    onResetDefault={() => {
+                      const def = DEFAULT_EMAIL_TEMPLATES[editingEmail.key];
+                      if (def) {
+                        if (window.confirm("Naozaj chcete obnoviť predvolenú šablónu? Všetky vaše zmeny v tele e-mailu sa vymažú.")) {
+                          setEmailBody(def.body);
+                          setEmailSubject(def.subject);
+                          const wysiwygEditor = document.getElementById("wysiwyg-email-editor");
+                          if (wysiwygEditor) {
+                            wysiwygEditor.innerHTML = def.body;
+                          }
+                        }
+                      }
+                    }}
                   />
                 </FormRow>
               </div>
@@ -837,28 +862,50 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                         <code style={{ fontSize: 12, fontWeight: 700, color: "var(--primary)", fontFamily: "monospace" }}>
                           {v.name}
                         </code>
-                        <button
-                          type="button"
-                          onClick={() => handleCopy(v.name)}
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: "3px 6px",
-                            borderRadius: 4,
-                            cursor: "pointer",
-                            background: copied ? "var(--agree)" : "var(--primary)",
-                            color: "#fff",
-                            border: "none",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 3,
-                            transition: "all 0.15s",
-                          }}
-                        >
-                          {copied ? "Kopírované" : "Kopírovať"}
-                        </button>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (onInsertRef.current) {
+                                onInsertRef.current(v.name);
+                              }
+                            }}
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: "3px 6px",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              background: "none",
+                              border: "1px solid var(--line)",
+                              color: "var(--primary)",
+                            }}
+                          >
+                            Vložiť
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(v.name)}
+                            style={{
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              padding: "3px 6px",
+                              borderRadius: 4,
+                              cursor: "pointer",
+                              background: copied ? "var(--agree)" : "var(--primary)",
+                              color: "#fff",
+                              border: "none",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 3,
+                              transition: "all 0.15s",
+                            }}
+                          >
+                            {copied ? "Kopírované" : "Kopírovať"}
+                          </button>
+                        </div>
                       </div>
-                      <div style={{ fontSize: 11, color: "var(--ink-soft)" }}>{v.desc}</div>
+                      <div style={{ fontSize: 11, color: "var(--ink-soft)", lineHeight: 1.3 }}>{v.desc}</div>
                     </div>
                   );
                 })}

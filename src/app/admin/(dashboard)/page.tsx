@@ -38,56 +38,64 @@ export default async function AdminDashboard() {
   });
   const eligibleVotes = sumVotesResult._sum.votes || 0;
 
-  // 3. Fetch active poll
-  const activePoll = await db.poll.findFirst({
+  // 3. Fetch active polls
+  const activePolls = await db.poll.findMany({
     where: { buildingId: building.id, status: PollStatus.active },
-    include: { questions: { orderBy: { no: "asc" } } }
+    include: { questions: { orderBy: { no: "asc" } } },
+    orderBy: { createdAt: "desc" }
   });
 
-  // 4. Calculate turnout & disputed units for active poll
-  let votedUnits = 0;
-  let turnout = 0;
-  let disputedUnitsCount = 0;
-  const disputedUnitsList: any[] = [];
-  const partialOwnersList: any[] = [];
-  const activePollQuestionsTallies: any[] = [];
+  // Fetch counts for stats overview
+  const activePollsCount = await db.poll.count({ where: { buildingId: building.id, status: PollStatus.active } });
+  const draftPollsCount = await db.poll.count({ where: { buildingId: building.id, status: PollStatus.draft } });
+  const closedPollsCount = await db.poll.count({ where: { buildingId: building.id, status: PollStatus.closed } });
+  const totalPollsCount = activePollsCount + draftPollsCount + closedPollsCount;
 
+  // 4. Calculate turnout & disputed units for active polls
   const activeUnits = await db.unit.findMany({
     where: { buildingId: building.id, status: "active" },
     include: { owners: true }
   });
 
   const missingEmailUnits = activeUnits.filter(u => !u.email);
+  const alerts: any[] = [];
+  const activePollsData: any[] = [];
+  const disputedUnitsList: any[] = [];
+  const partialOwnersList: any[] = [];
 
-  if (activePoll) {
-    // Fetch all votes & subvotes to determine who voted
-    const votes = await db.vote.findMany({ where: { pollId: activePoll.id } });
-    const subvotes = await db.coownerSubvote.findMany({ where: { pollId: activePoll.id } });
+  for (const poll of activePolls) {
+    // Fetch all votes & subvotes to determine who voted in this poll
+    const votes = await db.vote.findMany({ where: { pollId: poll.id } });
+    const subvotes = await db.coownerSubvote.findMany({ where: { pollId: poll.id } });
 
     const votedUnitIds = new Set([
       ...votes.map(v => v.unitId),
       ...subvotes.map(sv => sv.unitId)
     ]);
-    votedUnits = votedUnitIds.size;
-    turnout = totalEligible > 0 ? Math.round((votedUnits / totalEligible) * 100) : 0;
+    const votedUnits = votedUnitIds.size;
+    const turnout = totalEligible > 0 ? Math.round((votedUnits / totalEligible) * 100) : 0;
 
-    // Check which units are disputed on ANY question
+    // Check which units are disputed on ANY question in this poll
+    const disputedInThisPoll: any[] = [];
     for (const u of activeUnits) {
       let isDisputed = false;
-      for (const q of activePoll.questions) {
-        const eff = await getEffectiveUnitVote(activePoll.id, u.id, q.no);
+      for (const q of poll.questions) {
+        const eff = await getEffectiveUnitVote(poll.id, u.id, q.no);
         if (eff.disputed) {
           isDisputed = true;
           break;
         }
       }
       if (isDisputed) {
-        disputedUnitsList.push(u);
+        disputedInThisPoll.push(u);
+        if (!disputedUnitsList.some(du => du.id === u.id)) {
+          disputedUnitsList.push(u);
+        }
       }
     }
-    disputedUnitsCount = disputedUnitsList.length;
 
-    // Check for owners owning multiple units who haven't voted for all
+    // Check for owners owning multiple units who haven't voted for all in this poll
+    const partialInThisPoll: any[] = [];
     const ownerUnitsMap: Record<string, { name: string; units: typeof activeUnits }> = {};
     activeUnits.forEach(u => {
       u.owners.forEach(o => {
@@ -106,6 +114,10 @@ export default async function AdminDashboard() {
         const hasVotedSome = group.units.some(u => votedUnitIds.has(u.id));
         const hasNotVotedSome = group.units.some(u => !votedUnitIds.has(u.id));
         if (hasVotedSome && hasNotVotedSome) {
+          partialInThisPoll.push({
+            name: group.name,
+            units: group.units
+          });
           partialOwnersList.push({
             name: group.name,
             units: group.units
@@ -115,8 +127,9 @@ export default async function AdminDashboard() {
     });
 
     // Compute tallies for each active poll question
-    for (const q of activePoll.questions) {
-      const tally = await tallyQuestion(activePoll.id, q.id);
+    const activePollQuestionsTallies: any[] = [];
+    for (const q of poll.questions) {
+      const tally = await tallyQuestion(poll.id, q.id);
       activePollQuestionsTallies.push({
         no: q.no,
         title: q.title,
@@ -128,6 +141,25 @@ export default async function AdminDashboard() {
         status: tally.status
       });
     }
+
+    const formattedEnd = poll.endAt.toLocaleString("sk-SK", { 
+      day: "numeric", 
+      month: "numeric", 
+      year: "numeric", 
+      hour: "2-digit", 
+      minute: "2-digit" 
+    });
+
+    activePollsData.push({
+      poll,
+      votedUnits,
+      turnout,
+      disputedUnitsCount: disputedInThisPoll.length,
+      disputedUnitsList: disputedInThisPoll,
+      partialOwnersList: partialInThisPoll,
+      questionsTallies: activePollQuestionsTallies,
+      formattedEnd
+    });
   }
 
   // 5. Fetch archived polls
@@ -136,6 +168,13 @@ export default async function AdminDashboard() {
     orderBy: { endAt: "desc" },
     include: { sealedResult: true },
     take: 4
+  });
+
+  // Fetch all active and draft polls for overview list
+  const activeAndDraftPolls = await db.poll.findMany({
+    where: { buildingId: building.id, status: { in: [PollStatus.active, PollStatus.draft] } },
+    orderBy: { createdAt: "desc" },
+    include: { questions: true }
   });
 
   // 5.5 Fetch login history logs for Superadmin
@@ -147,9 +186,15 @@ export default async function AdminDashboard() {
       })
     : [];
 
+  const activePoll = activePolls[0] || null;
+  const activePollData = activePollsData[0] || null;
+  const votedUnits = activePollData ? activePollData.votedUnits : 0;
+  const turnout = activePollData ? activePollData.turnout : 0;
+  const disputedUnitsCount = activePollData ? activePollData.disputedUnitsCount : 0;
+  const activePollQuestionsTallies = activePollData ? activePollData.questionsTallies : [];
+  const formattedEnd = activePollData ? activePollData.formattedEnd : "";
+
   // 6. Generate Alerts
-  const alerts: any[] = [];
-  
   disputedUnitsList.forEach(u => {
     alerts.push({
       icon: "alert",
@@ -180,101 +225,132 @@ export default async function AdminDashboard() {
     });
   });
 
-  const formattedEnd = activePoll 
-    ? activePoll.endAt.toLocaleString("sk-SK", { day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) 
-    : "";
-
   if (session.role === "vlastnik") {
     return (
       <div className="admin-page-container">
         <PageHead eyebrow={building.name} title="Klientská zóna vlastníka" />
 
-        {activePoll ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, marginBottom: 28 }}>
-            <Card pad={0}>
-              <div style={{ display: "flex", flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 350px", padding: "26px 28px", borderRight: "1px solid var(--line)" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                    <Pill tone="primary" size="sm" icon="vote">Prebieha hlasovanie</Pill>
-                  </div>
-                  <h2 style={{ fontFamily: "var(--serif)", fontSize: 21, fontWeight: 600, margin: "0 0 8px" }}>
-                    {activePoll.title}
-                  </h2>
-                  <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 16px" }}>
-                    {activePoll.reason}
-                  </p>
+        {/* Stats Grid */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 28 }}>
+          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--primary-bg)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Ic name="vote" size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Celkovo hlasovaní</div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", marginTop: 2 }}>{totalPollsCount}</div>
+            </div>
+          </Card>
+          
+          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(46, 125, 91, 0.12)", color: "var(--agree)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Ic name="checkCircle" size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Prebiehajúce</div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--agree)", marginTop: 2 }}>{activePollsCount}</div>
+            </div>
+          </Card>
 
-                  <div style={{ fontSize: "12px", color: "var(--ink-soft)", margin: "14px 0" }}>
-                    <strong>Koniec hlasovania:</strong> {new Date(activePoll.endAt).toLocaleString("sk-SK")}
+          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--paper-2)", color: "var(--ink-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Ic name="lock" size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Ukončené</div>
+              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink-soft)", marginTop: 2 }}>{closedPollsCount}</div>
+            </div>
+          </Card>
+        </div>
+
+        {activePollsData.length > 0 ? (
+          activePollsData.map(({ poll, votedUnits, turnout, questionsTallies, formattedEnd }) => (
+            <div key={poll.id} style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, marginBottom: 28 }}>
+              <Card pad={0}>
+                <div style={{ display: "flex", flexWrap: "wrap" }}>
+                  <div style={{ flex: "1 1 350px", padding: "26px 28px", borderRight: "1px solid var(--line)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                      <Pill tone="primary" size="sm" icon="vote">Prebieha hlasovanie</Pill>
+                    </div>
+                    <h2 style={{ fontFamily: "var(--serif)", fontSize: 21, fontWeight: 600, margin: "0 0 8px" }}>
+                      {poll.title}
+                    </h2>
+                    <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 16px" }}>
+                      {poll.reason}
+                    </p>
+
+                    <div style={{ fontSize: "12px", color: "var(--ink-soft)", margin: "14px 0" }}>
+                      <strong>Koniec hlasovania:</strong> {formattedEnd}
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 7 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>Účasť vlastníkov</span>
+                      <span style={{ fontSize: 13, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
+                        {votedUnits} / {totalEligible} jednotiek
+                      </span>
+                      <span style={{ marginLeft: "auto", fontFamily: "var(--serif)", fontSize: 20, fontWeight: 600, whiteSpace: "nowrap" }}>
+                        {turnout} %
+                      </span>
+                    </div>
+                    <Progress value={votedUnits} total={totalEligible} />
+
+                    <div style={{ marginTop: 16, fontSize: "12.5px", color: "var(--ink-soft)", background: "var(--paper-2)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)" }}>
+                      ℹ️ <strong>Ako hlasovať?</strong> Odkaz na elektronické hlasovanie Vám bol zaslaný na Váš e-mail. Ak ste ho nedostali, kontaktujte správcu domu.
+                    </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 7 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>Účasť vlastníkov</span>
-                    <span style={{ fontSize: 13, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
-                      {votedUnits} / {totalEligible} jednotiek
-                    </span>
-                    <span style={{ marginLeft: "auto", fontFamily: "var(--serif)", fontSize: 20, fontWeight: 600, whiteSpace: "nowrap" }}>
-                      {turnout} %
-                    </span>
-                  </div>
-                  <Progress value={votedUnits} total={totalEligible} />
+                  <div style={{ flex: "1 1 260px", padding: "26px 28px", background: "var(--paper-2)" }}>
+                    <div style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
+                      Stav prebiehajúcich otázok
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {questionsTallies.map((q: any) => {
+                        const toneMap = {
+                          approved: "success",
+                          rejected: "danger",
+                          short: "accent"
+                        };
+                        const labelMap = {
+                          approved: "Schválené",
+                          rejected: "Neschválené",
+                          short: "Zatiaľ nedosiahnutá väčšina"
+                        };
+                        const iconMap = {
+                          approved: "checkCircle",
+                          rejected: "xCircle",
+                          short: "clock"
+                        };
+                        const currentStatus = q.status as "approved" | "rejected" | "short";
 
-                  <div style={{ marginTop: 16, fontSize: "12.5px", color: "var(--ink-soft)", background: "var(--paper-2)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)" }}>
-                    ℹ️ <strong>Ako hlasovať?</strong> Odkaz na elektronické hlasovanie Vám bol zaslaný na Váš e-mail. Ak ste ho nedostali, kontaktujte správcu domu.
-                  </div>
-                </div>
-
-                <div style={{ flex: "1 1 260px", padding: "26px 28px", background: "var(--paper-2)" }}>
-                  <div style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
-                    Stav prebiehajúcich otázok
-                  </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {activePollQuestionsTallies.map((q) => {
-                      const toneMap = {
-                        approved: "success",
-                        rejected: "danger",
-                        short: "accent"
-                      };
-                      const labelMap = {
-                        approved: "Schválené",
-                        rejected: "Neschválené",
-                        short: "Zatiaľ nedosiahnutá väčšina"
-                      };
-                      const iconMap = {
-                        approved: "checkCircle",
-                        rejected: "xCircle",
-                        short: "clock"
-                      };
-                      const currentStatus = q.status as "approved" | "rejected" | "short";
-
-                      return (
-                        <div key={q.no}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>{q.no}.</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {q.title}
-                            </span>
-                            <Pill tone={toneMap[currentStatus] as any} size="sm" icon={iconMap[currentStatus]}>
-                              {labelMap[currentStatus]}
-                            </Pill>
+                        return (
+                          <div key={q.no}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>{q.no}.</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                {q.title}
+                              </span>
+                              <Pill tone={toneMap[currentStatus] as any} size="sm" icon={iconMap[currentStatus]}>
+                                {labelMap[currentStatus]}
+                              </Pill>
+                            </div>
+                            <Progress
+                              height={7}
+                              total={q.total}
+                              threshold={q.need}
+                              segments={[
+                                { value: q.agree, color: "var(--agree)" },
+                                { value: q.disagree, color: "var(--disagree)" },
+                              ]}
+                            />
                           </div>
-                          <Progress
-                            height={7}
-                            total={q.total}
-                            threshold={q.need}
-                            segments={[
-                              { value: q.agree, color: "var(--agree)" },
-                              { value: q.disagree, color: "var(--disagree)" },
-                            ]}
-                          />
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </Card>
-          </div>
+              </Card>
+            </div>
+          ))
         ) : (
           <Card style={{ padding: "45px 30px", textAlign: "center", marginBottom: 28 }}>
             <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
@@ -353,6 +429,49 @@ export default async function AdminDashboard() {
         </Link>
       </PageHead>
 
+      {/* Stats Overview Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 28 }}>
+        <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--primary-bg)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ic name="vote" size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Celkovo hlasovaní</div>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", marginTop: 2 }}>{totalPollsCount}</div>
+          </div>
+        </Card>
+        
+        <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(46, 125, 91, 0.12)", color: "var(--agree)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ic name="checkCircle" size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Prebiehajúce</div>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--agree)", marginTop: 2 }}>{activePollsCount}</div>
+          </div>
+        </Card>
+
+        <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(176, 125, 43, 0.12)", color: "var(--accent-ink)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ic name="clock" size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Rozpracované</div>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--accent-ink)", marginTop: 2 }}>{draftPollsCount}</div>
+          </div>
+        </Card>
+
+        <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--paper-2)", color: "var(--ink-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Ic name="lock" size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Ukončené</div>
+            <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink-soft)", marginTop: 2 }}>{closedPollsCount}</div>
+          </div>
+        </Card>
+      </div>
+
       {/* Active poll banner */}
       {activePoll ? (
         <Card pad={0} style={{ overflow: "hidden", marginBottom: 28 }}>
@@ -420,6 +539,57 @@ export default async function AdminDashboard() {
         </Card>
       )}
 
+      {/* Prebiehajúce a plánované hlasovania list */}
+      <Card style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 16 }}>
+          Prebiehajúce a plánované hlasovania ({activeAndDraftPolls.length})
+        </div>
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {activeAndDraftPolls.length > 0 ? (
+            activeAndDraftPolls.map((a, i) => {
+              const isActive = a.status === PollStatus.active;
+              return (
+                <div
+                  key={a.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: "12px 0",
+                    borderTop: i ? "1px solid var(--line)" : "none",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <Ic name="vote" size={18} style={{ color: isActive ? "var(--agree)" : "var(--ink-soft)", flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 200 }}>
+                    <Link href={`/admin/poll/${a.id}`} style={{ textDecoration: "none", color: "inherit" }}>
+                      <span style={{ fontSize: "14px", fontWeight: 600, cursor: "pointer", color: "var(--ink)" }}>
+                        {a.title}
+                      </span>
+                    </Link>
+                    <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", marginTop: 2 }}>
+                      Trvanie: {new Date(a.startAt).toLocaleDateString("sk-SK")} – {new Date(a.endAt).toLocaleDateString("sk-SK")} · Otázok: {a.questions.length}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <Pill tone={isActive ? "success" : "neutral"} size="sm">
+                      {isActive ? "prebieha" : "rozpracované"}
+                    </Pill>
+                    <Link href={`/admin/poll/${a.id}`} style={{ textDecoration: "none" }}>
+                      <Btn kind="secondary" size="sm" icon="eye">Detail</Btn>
+                    </Link>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div style={{ fontSize: 13, color: "var(--ink-soft)", textAlign: "center", padding: "10px 0" }}>
+              Žiadne prebiehajúce ani plánované hlasovania.
+            </div>
+          )}
+        </div>
+      </Card>
+
       {/* Alerts */}
       {alerts.length > 0 && (
         <div style={{ marginBottom: 30 }}>
@@ -467,7 +637,7 @@ export default async function AdminDashboard() {
               Stav otázok
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              {activePollQuestionsTallies.map((q) => {
+              {activePollQuestionsTallies.map((q: any) => {
                 const toneMap = {
                   approved: "success",
                   rejected: "danger",
