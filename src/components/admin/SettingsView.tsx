@@ -176,6 +176,62 @@ const convertPlainTextToHtml = (key: string, text: string): string => {
   return html.trim();
 };
 
+const generateEmailPreviewHtml = (key: string, subject: string, bodyText: string): { subject: string; bodyHtml: string } => {
+  // 1. Convert plain text to clean HTML
+  let bodyHtml = convertPlainTextToHtml(key, bodyText);
+  
+  // 2. Replace variables with realistic mock values
+  const mockValues: Record<string, string> = {
+    "{ownerName}": "Ján Novák",
+    "{buildingName}": "Bytový dom Björnsonova 3",
+    "{buildingShort}": "Björnsonova 3",
+    "{pollTitle}": "Obnova spoločných priestorov – letný projekt 2026",
+    "{pollReason}": "Financovanie maľovania chodieb a výmeny hlavného vchodového osvetlenia",
+    "{endFormatted}": "13. 7. 2026 o 20:00",
+    "{magicLink}": "#",
+    "{protocolLink}": "#",
+    "{unitNo}": "12",
+    "{dateFormatted}": "29. 6. 2026 o 15:45",
+    "{loginLink}": "https://hlasujme.sk/admin/login",
+    "{loginEmail}": "jan.novak@email.sk",
+    "{rawPassword}": "AbCdEf123",
+    "{answersList}": `
+      <li style="margin-bottom: 8px;">
+        <strong>Otázka č. 1:</strong> Schválenie rozpočtu pre maľovanie spoločných priestorov <br/>
+        Odpoveď: <span style="font-weight: bold; color: #2E7D5B;">Súhlasím (ZA)</span>
+      </li>
+      <li style="margin-bottom: 8px;">
+        <strong>Otázka č. 2:</strong> Výber dodávateľa stavebných prác <br/>
+        Odpoveď: <span style="font-weight: bold; color: #B23A48;">Nesúhlasím (PROTI)</span>
+      </li>
+    `
+  };
+  
+  let previewSubject = subject;
+  Object.entries(mockValues).forEach(([placeholder, value]) => {
+    previewSubject = previewSubject.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
+    bodyHtml = bodyHtml.replace(new RegExp(placeholder.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'), 'g'), value);
+  });
+  
+  // 3. Apply the exact inline styles from email.ts applyEmailStyles
+  let styled = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA; text-align: left; box-sizing: border-box;">${bodyHtml}</div>`;
+  
+  styled = styled
+    .replace(/<h2>/g, '<h2 style="font-family: Georgia, serif; color: #1F3A5F; margin-top: 0; font-size: 18px; font-weight: 600; border-bottom: 2px solid #1F3A5F; padding-bottom: 8px; line-height: 1.3;">')
+    .replace(/<\/h2>/g, '</h2>')
+    .replace(/<h3>/g, '<h3 style="margin-top: 0; color: #1F3A5F; font-size: 15px; font-weight: 600; margin-bottom: 8px;">')
+    .replace(/<\/h3>/g, '</h3>')
+    .replace(/<div class="box">/g, '<div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #E5DFD3; margin: 15px 0; font-size: 13.5px;">')
+    .replace(/<a class="btn" href="([^"]+)">/g, '<a href="$1" style="background-color: #1F3A5F; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 13.5px;" onclick="return false;">')
+    .replace(/<p class="note">/g, '<p style="font-size: 12px; color: #606673; line-height: 1.4; margin: 10px 0 0;">')
+    .replace(/<p class="meta">/g, '<p style="margin: 0 0 8px; color: #5C6473; font-size: 13.5px; line-height: 1.4;">')
+    .replace(/<p class="warn">/g, '<p style="font-size: 13px; color: #b91c1c; font-weight: 600; line-height: 1.5; background: #fffbeb; border: 1px solid #fef3c7; padding: 10px 12px; border-radius: 6px; margin: 18px 0;">')
+    .replace(/<code class="pass">/g, '<code style="font-family: monospace; font-size: 15px; color: #b91c1c; font-weight: bold; background: #fee2e2; padding: 2px 6px; border-radius: 4px;">')
+    .replace(/<p>/g, '<p style="font-size: 14px; line-height: 1.5; color: #334155; margin: 10px 0;">');
+    
+  return { subject: previewSubject, bodyHtml: styled };
+};
+
 const MAJORITY_LABELS: Record<string, string> = {
   "half-all": "Nadpolovičná väčšina všetkých vlastníkov (Zákonná)",
   "half_all": "Nadpolovičná väčšina všetkých vlastníkov (Zákonná)",
@@ -209,6 +265,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
   const [emailError, setEmailError] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [emailModalTab, setEmailModalTab] = useState<"edit" | "preview">("edit");
 
   const handleCopy = (placeholder: string) => {
     navigator.clipboard.writeText(placeholder);
@@ -258,6 +315,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
     setEmailSubject(et.subject);
     setEmailBody(convertHtmlToPlainText(et.body));
     setEmailError("");
+    setEmailModalTab("edit");
     setEmailModalOpen(true);
   };
 
@@ -623,59 +681,100 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 20 }}>
-            {/* Editor form */}
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 15 }}>
-              <FormRow label="Predmet e-mailu" hint="Môžete použiť premenné ako {pollTitle}">
-                <Input
-                  value={emailSubject}
-                  onChange={(e) => {
-                    setEmailSubject(e.target.value);
-                    setEmailError("");
-                  }}
-                  placeholder="Zadajte predmet e-mailu"
-                  required
-                />
-              </FormRow>
-
-              <FormRow label="Telo e-mailu" hint="Môžete používať premenné z pravého panela.">
-                <textarea
-                  style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    padding: "10px 13px",
-                    borderRadius: 9,
-                    border: "1px solid var(--line)",
-                    fontFamily: "inherit",
-                    fontSize: "13.5px",
-                    background: "var(--paper)",
-                    color: "var(--ink)",
-                    minHeight: 280,
-                    resize: "vertical",
-                    lineHeight: 1.5,
-                  }}
-                  placeholder="Sem napíšte text e-mailu..."
-                  value={emailBody}
-                  onChange={(e) => {
-                    setEmailBody(e.target.value);
-                    setEmailError("");
-                  }}
-                  required
-                />
-              </FormRow>
-            </div>
-
-            {/* Sidebar with copyable variables */}
-            <div
+          {/* Modal Tab Switcher */}
+          <div style={{ display: "flex", gap: 8, borderBottom: "1px solid var(--line)", paddingBottom: 0, marginBottom: 20, marginTop: -10 }}>
+            <button
+              type="button"
+              onClick={() => setEmailModalTab("edit")}
               style={{
-                width: 250,
-                borderLeft: "1px solid var(--line)",
-                paddingLeft: 16,
-                display: "flex",
-                flexDirection: "column",
-                gap: 12,
+                background: "none",
+                border: "none",
+                fontSize: "13.5px",
+                fontWeight: 600,
+                color: emailModalTab === "edit" ? "var(--primary)" : "var(--ink-soft)",
+                borderBottom: emailModalTab === "edit" ? "3px solid var(--primary)" : "3px solid transparent",
+                padding: "8px 16px",
+                cursor: "pointer",
+                marginBottom: -2,
+                transition: "all 0.15s"
               }}
             >
+              Editor šablóny
+            </button>
+            <button
+              type="button"
+              onClick={() => setEmailModalTab("preview")}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "13.5px",
+                fontWeight: 600,
+                color: emailModalTab === "preview" ? "var(--primary)" : "var(--ink-soft)",
+                borderBottom: emailModalTab === "preview" ? "3px solid var(--primary)" : "3px solid transparent",
+                padding: "8px 16px",
+                cursor: "pointer",
+                marginBottom: -2,
+                transition: "all 0.15s"
+              }}
+            >
+              Živý náhľad e-mailu
+            </button>
+          </div>
+
+          {emailModalTab === "edit" ? (
+            <div style={{ display: "flex", gap: 20 }}>
+              {/* Editor form */}
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 15 }}>
+                <FormRow label="Predmet e-mailu" hint="Môžete použiť premenné ako {pollTitle}">
+                  <Input
+                    value={emailSubject}
+                    onChange={(e) => {
+                      setEmailSubject(e.target.value);
+                      setEmailError("");
+                    }}
+                    placeholder="Zadajte predmet e-mailu"
+                    required
+                  />
+                </FormRow>
+
+                <FormRow label="Telo e-mailu" hint="Môžete používať premenné z pravého panela.">
+                  <textarea
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "10px 13px",
+                      borderRadius: 9,
+                      border: "1px solid var(--line)",
+                      fontFamily: "inherit",
+                      fontSize: "13.5px",
+                      background: "var(--paper)",
+                      color: "var(--ink)",
+                      minHeight: 280,
+                      resize: "vertical",
+                      lineHeight: 1.5,
+                    }}
+                    placeholder="Sem napíšte text e-mailu..."
+                    value={emailBody}
+                    onChange={(e) => {
+                      setEmailBody(e.target.value);
+                      setEmailError("");
+                    }}
+                    required
+                  />
+                </FormRow>
+              </div>
+
+              {/* Sidebar with copyable variables */}
+              <div
+                style={{
+                  width: 250,
+                  borderLeft: "1px solid var(--line)",
+                  paddingLeft: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 12,
+                }}
+              >
               <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4, margin: "0 0 4px", color: "var(--ink-soft)" }}>
                 Premenné šablóny
               </h4>
@@ -764,6 +863,60 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
               </div>
             </div>
           </div>
+        ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 15 }}>
+              {/* Mock email client header */}
+              <div
+                style={{
+                  background: "var(--paper-2)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 9,
+                  padding: "12px 16px",
+                  fontSize: "13px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 6
+                }}
+              >
+                <div>
+                  <strong style={{ color: "var(--ink-soft)" }}>Predmet:</strong>{" "}
+                  <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+                    {generateEmailPreviewHtml(editingEmail.key, emailSubject, emailBody).subject}
+                  </span>
+                </div>
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 6 }}>
+                  <strong style={{ color: "var(--ink-soft)" }}>Od:</strong>{" "}
+                  <span style={{ color: "var(--ink)" }}>info@hlasujme.sk</span>
+                </div>
+                <div>
+                  <strong style={{ color: "var(--ink-soft)" }}>Komu:</strong>{" "}
+                  <span style={{ color: "var(--ink)" }}>jan.novak@email.sk</span>
+                </div>
+              </div>
+
+              {/* Styled email container mockup */}
+              <div
+                style={{
+                  background: "var(--paper-3)",
+                  border: "1px solid var(--line)",
+                  borderRadius: 12,
+                  padding: "30px 16px",
+                  display: "flex",
+                  justifyContent: "center",
+                  minHeight: 380,
+                  maxHeight: 500,
+                  overflowY: "auto"
+                }}
+              >
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: generateEmailPreviewHtml(editingEmail.key, emailSubject, emailBody).bodyHtml
+                  }}
+                  style={{ width: "100%", maxWidth: 600 }}
+                />
+              </div>
+            </div>
+          )}
         </Modal>
       )}
     </div>
