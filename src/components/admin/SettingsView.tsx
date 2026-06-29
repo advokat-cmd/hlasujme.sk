@@ -29,6 +29,153 @@ interface SettingsViewProps {
   emailTemplates: EmailTemplate[];
 }
 
+// Helper to convert HTML to plain text without tags
+const convertHtmlToPlainText = (html: string): string => {
+  if (!html) return "";
+  
+  let text = html.replace(/\r/g, "");
+
+  // Remove the outermost div styles if they wrap the entire template
+  text = text.replace(/<div style="font-family:[^>]+>([\s\S]*?)<\/div>/i, "$1");
+
+  text = text
+    // Replace headings (h2)
+    .replace(/<h2>(.*?)<\/h2>/gi, "$1\n\n")
+    // Replace subheadings (h3)
+    .replace(/<h3>(.*?)<\/h3>/gi, "$1\n")
+    // Replace warning blocks
+    .replace(/<p class="warn">([\s\S]*?)<\/p>/gi, "$1\n\n")
+    // Replace note blocks
+    .replace(/<p class="note">([\s\S]*?)<\/p>/gi, "$1\n\n")
+    // Replace list tags
+    .replace(/<ul[^>]*>([\s\S]*?)<\/ul>/gi, "$1")
+    // Replace meta credentials elements inside the boxes
+    .replace(/<p class="meta"><strong>(.*?):<\/strong>\s*<a href="[^"]+">(.*?)<\/a><\/p>/gi, "$1: $2\n")
+    .replace(/<p class="meta"><strong>(.*?):<\/strong>\s*<code class="pass">(.*?)<\/code><\/p>/gi, "$1: $2\n")
+    .replace(/<p class="meta"><strong>(.*?):<\/strong>\s*(.*?)<\/p>/gi, "$1: $2\n")
+    // Replace standard paragraphs
+    .replace(/<p>([\s\S]*?)<\/p>/gi, "$1\n\n")
+    // Replace box divs
+    .replace(/<div class="box">([\s\S]*?)<\/div>/gi, "$1\n\n")
+    .replace(/<div style="background:[^>]+>([\s\S]*?)<\/div>/gi, "$1\n\n")
+    // Replace button block
+    .replace(/<div style="text-align:\s*center;[^>]+>\s*<a class="btn" href="[^"]+">(.*?)<\/a>\s*<\/div>/gi, "$1\n\n")
+    .replace(/<div style="text-align:\s*center;[^>]+>\s*<span[^>]+>(.*?)<\/span>\s*<\/div>/gi, "$1\n\n")
+    .replace(/<a class="btn" href="[^"]+">(.*?)<\/a>/gi, "$1\n\n")
+    // Clean up br
+    .replace(/<br\s*\/?>/gi, "\n")
+    // Strip other remaining HTML tags
+    .replace(/<[^>]+>/g, "")
+    .trim();
+
+  // Normalize multiple empty lines to maximum 2 newlines
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text;
+};
+
+// Helper to convert plain text back to structured HTML
+const convertPlainTextToHtml = (key: string, text: string): string => {
+  if (!text) return "";
+  
+  const paragraphs = text
+    .replace(/\r/g, "")
+    .trim()
+    .split(/\n\n+/);
+    
+  let html = "";
+  
+  paragraphs.forEach((p, idx) => {
+    p = p.trim();
+    if (!p) return;
+    
+    // Paragraph 1: h2 heading
+    if (idx === 0) {
+      html += `<h2>${p}</h2>\n`;
+      return;
+    }
+    
+    // Check for button text
+    if (p === "👉 HLASOVAŤ ELEKTRONICKY") {
+      html += `<div style="text-align: center; margin: 25px 0;">\n  <a class="btn" href="{magicLink}">👉 HLASOVAŤ ELEKTRONICKY</a>\n</div>\n`;
+      return;
+    }
+    if (p === "Stiahnuť zápisnicu (PDF)") {
+      html += `<div style="text-align: center; margin: 25px 0;">\n  <a class="btn" href="{protocolLink}">Stiahnuť zápisnicu (PDF)</a>\n</div>\n`;
+      return;
+    }
+    
+    // Check for credentials box
+    if (p.includes("Prihlasovacia stránka:") || p.includes("Prihlasovací e-mail:") || p.includes("Prihlasovacie heslo:")) {
+      let lines = p.split("\n").map(l => l.trim()).filter(Boolean);
+      let boxHtml = `<div class="box">\n`;
+      lines.forEach(line => {
+        if (line.startsWith("Prihlasovacia stránka:")) {
+          boxHtml += `  <p class="meta"><strong>Prihlasovacia stránka:</strong> <a href="{loginLink}">{loginLink}</a></p>\n`;
+        } else if (line.startsWith("Prihlasovací e-mail:")) {
+          boxHtml += `  <p class="meta"><strong>Prihlasovací e-mail:</strong> {loginEmail}</p>\n`;
+        } else if (line.startsWith("Prihlasovacie heslo:")) {
+          boxHtml += `  <p class="meta"><strong>Prihlasovacie heslo:</strong> <code class="pass">{rawPassword}</code></p>\n`;
+        } else {
+          const colonIdx = line.indexOf(":");
+          if (colonIdx !== -1) {
+            const label = line.substring(0, colonIdx).trim();
+            const val = line.substring(colonIdx + 1).trim();
+            boxHtml += `  <p class="meta"><strong>${label}:</strong> ${val}</p>\n`;
+          } else {
+            boxHtml += `  <p class="meta">${line}</p>\n`;
+          }
+        }
+      });
+      boxHtml += `</div>\n`;
+      html += boxHtml;
+      return;
+    }
+    
+    // Check for other info box (containing {pollTitle})
+    if (p.includes("{pollTitle}")) {
+      let lines = p.split("\n").map(l => l.trim()).filter(Boolean);
+      let boxHtml = `<div class="box">\n`;
+      lines.forEach((line, lineIdx) => {
+        if (lineIdx === 0) {
+          boxHtml += `  <h3>${line}</h3>\n`;
+        } else if (line === "{answersList}") {
+          boxHtml += `  <ul style="padding-left: 20px; margin: 0; font-size: 13.5px; line-height: 1.5; color: #5C6473;">\n    {answersList}\n  </ul>\n`;
+        } else {
+          const colonIdx = line.indexOf(":");
+          if (colonIdx !== -1) {
+            const label = line.substring(0, colonIdx).trim();
+            const val = line.substring(colonIdx + 1).trim();
+            boxHtml += `  <p class="meta"><strong>${label}:</strong> ${val}</p>\n`;
+          } else {
+            boxHtml += `  <p class="meta">${line}</p>\n`;
+          }
+        }
+      });
+      boxHtml += `</div>\n`;
+      html += boxHtml;
+      return;
+    }
+    
+    // Warn paragraph
+    if (p.startsWith("⚠️")) {
+      html += `<p class="warn">${p}</p>\n`;
+      return;
+    }
+    
+    // Note paragraph
+    if (p.toLowerCase().includes("tento e-mail bol odoslaný automaticky")) {
+      html += `<p class="note">${p}</p>\n`;
+      return;
+    }
+    
+    // Standard paragraph
+    const content = p.replace(/\n/g, "<br/>\n");
+    html += `<p>${content}</p>\n`;
+  });
+  
+  return html.trim();
+};
+
 const MAJORITY_LABELS: Record<string, string> = {
   "half-all": "Nadpolovičná väčšina všetkých vlastníkov (Zákonná)",
   "half_all": "Nadpolovičná väčšina všetkých vlastníkov (Zákonná)",
@@ -81,13 +228,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
     setEmailError("");
 
     try {
+      const convertedBody = convertPlainTextToHtml(editingEmail?.key || "", emailBody);
       const res = await fetch("/api/admin/email-templates", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           key: editingEmail?.key,
           subject: emailSubject.trim(),
-          body: emailBody,
+          body: convertedBody,
         }),
       });
 
@@ -108,7 +256,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
   const handleOpenEditEmail = (et: EmailTemplate) => {
     setEditingEmail(et);
     setEmailSubject(et.subject);
-    setEmailBody(et.body);
+    setEmailBody(convertHtmlToPlainText(et.body));
     setEmailError("");
     setEmailModalOpen(true);
   };
@@ -490,7 +638,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                 />
               </FormRow>
 
-              <FormRow label="Telo e-mailu (HTML šablóna)" hint="Môžete používať premenné z pravého panela.">
+              <FormRow label="Telo e-mailu" hint="Môžete používať premenné z pravého panela.">
                 <textarea
                   style={{
                     width: "100%",
@@ -498,15 +646,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                     padding: "10px 13px",
                     borderRadius: 9,
                     border: "1px solid var(--line)",
-                    fontFamily: "monospace",
-                    fontSize: "12.5px",
+                    fontFamily: "inherit",
+                    fontSize: "13.5px",
                     background: "var(--paper)",
                     color: "var(--ink)",
                     minHeight: 280,
                     resize: "vertical",
                     lineHeight: 1.5,
                   }}
-                  placeholder="Telo e-mailu v HTML..."
+                  placeholder="Sem napíšte text e-mailu..."
                   value={emailBody}
                   onChange={(e) => {
                     setEmailBody(e.target.value);
