@@ -140,6 +140,29 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     }
   };
 
+  const handleDeletePoll = async () => {
+    if (!confirm("Naozaj chcete natrvalo vymazať toto hlasovanie? Táto akcia vymaže všetky priradené otázky, hlasy, vygenerované prístupové kľúče a zápisnice. Táto akcia je nevratná.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/admin/poll/${poll.id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        alert(data.error || "Nepodarilo sa vymazať hlasovanie.");
+      } else {
+        alert("Hlasovanie bolo úspešne vymazané.");
+        router.push("/admin/poll/active");
+        router.refresh();
+      }
+    } catch (err) {
+      alert("Chyba pripojenia k sieti.");
+    }
+  };
+
   const handleTabChange = (newTab: string) => {
     setTab(newTab);
     if (typeof window !== "undefined") {
@@ -499,12 +522,17 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   return (
     <div className="admin-page-container">
       <PageHead eyebrow={`Bytový dom Björnsonova 3 · ${poll.status === "active" ? "prebieha" : "ukončené"}`} title={poll.title}>
-        {poll.status === "active" && userRole !== "vlastnik" && (
-          <>
-            <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
-              Uzavrieť hlasovanie
+        {userRole !== "vlastnik" && (
+          <div style={{ display: "flex", gap: 8 }}>
+            {poll.status === "active" && (
+              <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
+                Uzavrieť hlasovanie
+              </Btn>
+            )}
+            <Btn kind="ghost" icon="x" style={{ color: "var(--disagree)" }} onClick={handleDeletePoll}>
+              Vymazať hlasovanie
             </Btn>
-          </>
+          </div>
         )}
       </PageHead>
 
