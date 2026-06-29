@@ -277,74 +277,73 @@ interface VHeadProps {
   building: { name: string; address: string; short?: string | null } | null;
 }
 function VHead({ small, building }: VHeadProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkViewport = () => {
+      setIsMobile(window.innerWidth < 500);
+    };
+    checkViewport();
+    window.addEventListener("resize", checkViewport);
+    return () => window.removeEventListener("resize", checkViewport);
+  }, []);
+
   const streetName = building
     ? building.short || building.address.split(",")[0]
     : "";
+
+  const paddingTop = isMobile ? "14px" : "52px";
+  const paddingBottom = "14px";
 
   return (
     <div
       style={{
         background: "var(--v-head)",
         color: "#fff",
-        padding: small ? "52px 22px 16px" : "56px 22px 24px",
+        padding: `${paddingTop} 16px ${paddingBottom} 16px`,
+        boxSizing: "border-box",
+        borderBottom: "1px solid rgba(255,255,255,.08)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
       }}
     >
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 12,
-          marginBottom: small ? 0 : 14,
-        }}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-          <div
+      <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+        <div
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: "rgba(255,255,255,.15)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ic name="scale" size={17} style={{ color: "#fff" }} />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
+          Hlasovanie
+        </div>
+      </div>
+
+      {building && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,.85)", textAlign: "right" }}>
+            {streetName}
+          </span>
+          <img
+            src="/building.png"
+            alt="Bytový dom"
             style={{
               width: 30,
               height: 30,
-              borderRadius: 8,
-              background: "rgba(255,255,255,.15)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              borderRadius: 6,
+              objectFit: "cover",
+              background: "rgba(255,255,255,0.1)",
             }}
-          >
-            <Ic name="scale" size={17} style={{ color: "#fff" }} />
-          </div>
-          <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: 0.2 }}>
-            Hlasovanie
-          </div>
+          />
         </div>
-
-        {building && (
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 11.5, fontWeight: 500, color: "rgba(255,255,255,.85)", textAlign: "right" }}>
-              {streetName}
-            </span>
-            <img
-              src="/building.png"
-              alt="Bytový dom"
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 6,
-                objectFit: "cover",
-                background: "rgba(255,255,255,0.1)",
-              }}
-            />
-          </div>
-        )}
-      </div>
-      {!small && building && (
-        <>
-          <div style={{ fontFamily: "var(--serif)", fontSize: 21, fontWeight: 600, lineHeight: 1.2 }}>
-            {building.name}
-          </div>
-          <div style={{ fontSize: 12.5, color: "rgba(255,255,255,.7)", marginTop: 3 }}>
-            {building.address}
-          </div>
-        </>
       )}
     </div>
   );
