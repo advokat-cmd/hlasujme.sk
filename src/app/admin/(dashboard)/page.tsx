@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { PollStatus, VoteAnswer, MajorityType } from "@prisma/client";
-import { getEffectiveUnitVote, tallyQuestion } from "@/lib/engine";
+import { computePollResults } from "@/lib/engine";
 import { PageHead } from "@/components/admin/PageHead";
 import { Card } from "@/components/ui/Card";
 import { Btn } from "@/components/ui/Button";
@@ -64,9 +64,12 @@ export default async function AdminDashboard() {
   const partialOwnersList: any[] = [];
 
   for (const poll of activePolls) {
+    // Batched: all effective votes and tallies for this poll in 4 queries
+    const { tallies, effectiveVotes } = await computePollResults(poll.id);
+
     // Fetch all votes & subvotes to determine who voted in this poll
-    const votes = await db.vote.findMany({ where: { pollId: poll.id } });
-    const subvotes = await db.coownerSubvote.findMany({ where: { pollId: poll.id } });
+    const votes = await db.vote.findMany({ where: { pollId: poll.id }, select: { unitId: true } });
+    const subvotes = await db.coownerSubvote.findMany({ where: { pollId: poll.id }, select: { unitId: true } });
 
     const votedUnitIds = new Set([
       ...votes.map(v => v.unitId),
@@ -78,14 +81,8 @@ export default async function AdminDashboard() {
     // Check which units are disputed on ANY question in this poll
     const disputedInThisPoll: any[] = [];
     for (const u of activeUnits) {
-      let isDisputed = false;
-      for (const q of poll.questions) {
-        const eff = await getEffectiveUnitVote(poll.id, u.id, q.no);
-        if (eff.disputed) {
-          isDisputed = true;
-          break;
-        }
-      }
+      const perQuestion = effectiveVotes.get(u.id);
+      const isDisputed = poll.questions.some(q => perQuestion?.get(q.no)?.disputed);
       if (isDisputed) {
         disputedInThisPoll.push(u);
         if (!disputedUnitsList.some(du => du.id === u.id)) {
@@ -129,7 +126,8 @@ export default async function AdminDashboard() {
     // Compute tallies for each active poll question
     const activePollQuestionsTallies: any[] = [];
     for (const q of poll.questions) {
-      const tally = await tallyQuestion(poll.id, q.id);
+      const tally = tallies.get(q.no);
+      if (!tally) continue;
       activePollQuestionsTallies.push({
         no: q.no,
         title: q.title,

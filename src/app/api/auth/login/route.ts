@@ -35,9 +35,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nesprávny e-mail alebo heslo." }, { status: 401 });
     }
 
-    // Auto-promote Milan Ficek to superadmin in database if not already set
+    // Auto-promote the configured bootstrap superadmin (SUPERADMIN_EMAIL env)
+    const superadminEmail = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase();
     let finalRole = admin.role;
-    if (admin.email.trim().toLowerCase() === "milan@ficek.sk" && admin.role !== "superadmin") {
+    if (superadminEmail && admin.email.trim().toLowerCase() === superadminEmail && admin.role !== "superadmin") {
       await db.admin.update({
         where: { id: admin.id },
         data: { role: "superadmin" }

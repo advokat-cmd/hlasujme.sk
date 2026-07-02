@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { hashToken } from "@/lib/tokens";
 import { db } from "@/lib/db";
 import PDFDocument from "pdfkit";
-import fs from "fs";
-import path from "path";
 import crypto from "crypto";
+import { setupPdfFonts } from "@/lib/pdfFonts";
 
 export async function GET(
   request: Request,
@@ -101,60 +100,38 @@ export async function GET(
       doc.on("end", () => resolve(Buffer.concat(chunks)));
       doc.on("error", (err) => reject(err));
 
-      // Try project-bundled Roboto fonts first (cross-platform / Vercel compatible)
-      let resolvedFont = path.join(process.cwd(), "public/fonts/Roboto-Regular.ttf");
-      let resolvedFontBold = path.join(process.cwd(), "public/fonts/Roboto-Bold.ttf");
+      // Bundled fonts are cached per-process and preserve Slovak diacritics
+      const { t: clean, useBold, useRegular: regular } = setupPdfFonts(doc);
 
-      if (!fs.existsSync(resolvedFont)) {
-        // Fallback to Windows system Arial if running locally on Windows
-        resolvedFont = "C:\\Windows\\Fonts\\arial.ttf";
-        resolvedFontBold = "C:\\Windows\\Fonts\\arialbd.ttf";
-      }
-
-      const hasFont = fs.existsSync(resolvedFont);
-      const hasFontBold = fs.existsSync(resolvedFontBold);
-
-      if (hasFont) {
-        doc.registerFont("CustomFont", resolvedFont);
-        doc.font("CustomFont");
-      }
-      if (hasFontBold) {
-        doc.registerFont("CustomFont-Bold", resolvedFontBold);
-      }
-
-      const bold = (txt: string) => {
-        if (hasFontBold) doc.font("CustomFont-Bold");
-        return txt;
-      };
-      
-      const regular = () => {
-        if (hasFont) doc.font("CustomFont");
+      const boldClean = (txt: string) => {
+        useBold();
+        return clean(txt);
       };
 
       // Header
-      doc.fontSize(16).text("POTVRDENIE O ELEKTRONICKOM HLASOVANÍ", { align: "center" });
+      doc.fontSize(16).text(clean("POTVRDENIE O ELEKTRONICKOM HLASOVANÍ"), { align: "center" });
       doc.moveDown(0.5);
-      doc.fontSize(11).text(poll.title, { align: "center" });
+      doc.fontSize(11).text(clean(poll.title), { align: "center" });
       doc.moveDown(1.5);
 
       // Metadata box
       doc.fontSize(10);
-      doc.text("Bytový dom: ", { continued: true }).text(bold(`${unit.building.name}, ${unit.building.address}`)); regular();
-      doc.text("Jednotka: ", { continued: true }).text(bold(`Byt č. ${unit.no}`)); regular();
-      doc.text("Hlasujúci: ", { continued: true }).text(bold(voterName)); regular();
+      doc.text(clean("Bytový dom: "), { continued: true }).text(boldClean(`${unit.building.name}, ${unit.building.address}`)); regular();
+      doc.text(clean("Jednotka: "), { continued: true }).text(boldClean(`Byt č. ${unit.no}`)); regular();
+      doc.text(clean("Hlasujúci: "), { continued: true }).text(boldClean(voterName)); regular();
       
       if (owner) {
-        doc.text("Hlasovací podiel: ", { continued: true }).text(bold(`${(owner.share * 100).toFixed(2)}% (spoluvlastnícky hlas)`)); regular();
+        doc.text(clean("Hlasovací podiel: "), { continued: true }).text(boldClean(`${(owner.share * 100).toFixed(2)}% (spoluvlastnícky hlas)`)); regular();
       } else {
-        doc.text("Hlasovací podiel: ", { continued: true }).text(bold(`1.00 (celý byt / zástupca)`)); regular();
+        doc.text(clean("Hlasovací podiel: "), { continued: true }).text(boldClean(`1.00 (celý byt / zástupca)`)); regular();
       }
 
-      doc.text("Čas prijatia: ", { continued: true }).text(bold(lastVoteDate!.toLocaleString("sk-SK"))); regular();
-      doc.text("IP adresa: ", { continued: true }).text(bold(lastVoteIp)); regular();
+      doc.text(clean("Čas prijatia: "), { continued: true }).text(boldClean(lastVoteDate!.toLocaleString("sk-SK"))); regular();
+      doc.text(clean("IP adresa: "), { continued: true }).text(boldClean(lastVoteIp)); regular();
       doc.moveDown(1.5);
 
       doc.fontSize(11);
-      doc.text(bold("ZAZNAMENANÉ ODPOVEDE:")); regular();
+      doc.text(boldClean("ZAZNAMENANÉ ODPOVEDE:")); regular();
       doc.moveDown(0.5);
 
       // Render answers list
@@ -175,11 +152,11 @@ export async function GET(
         }
 
         doc.fontSize(10);
-        doc.text(bold(`Otázka č. ${q.no}`)); regular();
-        doc.text(q.title, { indent: 10 });
-        doc.fontSize(9).fillColor("#5C6473").text(q.text, { indent: 10 });
+        doc.text(boldClean(`Otázka č. ${q.no}`)); regular();
+        doc.text(clean(q.title), { indent: 10 });
+        doc.fontSize(9).fillColor("#5C6473").text(clean(q.text), { indent: 10 });
         doc.moveDown(0.2);
-        doc.fontSize(10).fillColor(choiceColor).text(`Odpoveď: ${choiceText}`, { indent: 10 });
+        doc.fontSize(10).fillColor(choiceColor).text(clean(`Odpoveď: ${choiceText}`), { indent: 10 });
         doc.fillColor("#1B2330");
         doc.moveDown(1);
       }
@@ -199,8 +176,8 @@ export async function GET(
 
       doc.text("------------------------------------------------------------------------------------------------------", { align: "center" });
       doc.moveDown(0.5);
-      doc.text("Tento dokument slúži ako elektronické potvrdenie o úspešnom odoslaní a zaevidovaní Vášho hlasu v systéme hlasujme.sk.", { align: "center" });
-      doc.text(`Kryptografický overovací kód: ${verificationHash}`, { align: "center" });
+      doc.text(clean("Tento dokument slúži ako elektronické potvrdenie o úspešnom odoslaní a zaevidovaní Vášho hlasu v systéme hlasujme.sk."), { align: "center" });
+      doc.text(clean(`Kryptografický overovací kód: ${verificationHash}`), { align: "center" });
       doc.end();
     });
 

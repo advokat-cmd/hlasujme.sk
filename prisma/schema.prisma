@@ -188,6 +188,8 @@ model VoteToken {
   expiresAt  DateTime
   usedAt     DateTime?
   createdAt  DateTime @default(now())
+
+  @@index([pollId, unitId])
 }
 
 enum VoteAnswer {
@@ -238,6 +240,8 @@ model AuditLog {
   prevHash  String
   entryHash String   @unique
   createdAt DateTime @default(now())
+
+  @@index([action, createdAt])
 }
 
 model SealedResult {
@@ -249,6 +253,11 @@ model SealedResult {
   sha256     String   // Hash of results data
   sealedAt   DateTime @default(now())
   pdfPath    String   // Path to PDF file on server
+
+  // Google Drive backup tracking
+  driveFileId      String?
+  driveWebViewLink String?
+  driveUploadedAt  DateTime?
 }
 
 model ProtocolEmailLog {
@@ -257,4 +266,6 @@ model ProtocolEmailLog {
   poll      Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
   email     String
   sentAt    DateTime @default(now())
+
+  @@index([pollId, email])
 }

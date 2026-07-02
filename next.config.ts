@@ -28,6 +28,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // pdfkit reads its .afm font data from node_modules at runtime — bundling it
+  // breaks those paths (ENOENT Helvetica.afm) and crashes PDF generation
+  serverExternalPackages: ["pdfkit"],
   async headers() {
     return [
       {

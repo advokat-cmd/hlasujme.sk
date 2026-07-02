@@ -11,11 +11,9 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
   const apiKey = process.env.EMAIL_API_KEY;
   const from = process.env.EMAIL_FROM || "info@hlasujme.sk";
 
-  console.log(`[Email Service] Sending email to ${to}... Subject: "${subject}"`);
-
   // Bypass sending in development if API key is a dummy or missing
   if (!apiKey || apiKey.startsWith("re_mock_") || apiKey.startsWith("pm_mock_")) {
-    console.log(`[Email Service] MOCK mode enabled. Email contents:\n---\nTo: ${to}\nSubject: ${subject}\nBody: ${html.slice(0, 300)}...\n---`);
+    console.log(`[Email Service] MOCK mode — email to ${to} not sent (no API key configured).`);
     return true;
   }
 
@@ -75,39 +73,6 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
 
 // Templates helper
 const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
-export function getInvitationEmailHtml(
-  ownerName: string,
-  buildingName: string,
-  pollTitle: string,
-  pollReason: string,
-  endFormatted: string,
-  magicLink: string
-): string {
-  return `
-    <div style="font-family: sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA;">
-      <h2 style="font-family: Georgia, serif; color: #1F3A5F; margin-top: 0;">Pozvánka na elektronické hlasovanie</h2>
-      <p>Vážený vlastník <strong>${ownerName}</strong>,</p>
-      <p>v bytovom dome <strong>${buildingName}</strong> bolo vyhlásené elektronické hlasovanie:</p>
-      
-      <div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #E5DFD3; margin: 15px 0;">
-        <h3 style="margin-top: 0; color: #1F3A5F;">${pollTitle}</h3>
-        <p style="margin-bottom: 0; color: #5C6473; font-size: 14px;"><strong>Dôvod:</strong> ${pollReason}</p>
-        <p style="margin-bottom: 0; color: #5C6473; font-size: 14px;"><strong>Termín na hlasovanie:</strong> do ${endFormatted}</p>
-      </div>
-
-      <p>Pre hlasovanie použite Váš osobný bezpečnostný odkaz (magic link) nižšie. Nikomu tento odkaz neposielajte, slúži ako Vaša jednoznačná identifikácia:</p>
-      
-      <div style="text-align: center; margin: 25px 0;">
-        <a href="${magicLink}" style="background-color: #1F3A5F; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">👉 HLASOVAŤ ELEKTRONICKY</a>
-      </div>
-
-      <p style="font-size: 12px; color: #606673; line-height: 1.4;">
-        Poznámka: Za byt sa počíta jeden hlas (v prípade spoluvlastníctva podľa nahláseného režimu). Hlasovanie prebieha v zmysle zákona č. 182/1993 Z. z. Svoj hlas môžete do skončenia hlasovania kedykoľvek zmeniť kliknutím na tento odkaz — započíta sa posledné odoslané hlasovanie.
-      </p>
-    </div>
-  `;
-}
 
 export function applyEmailStyles(html: string): string {
   // 1. Wrap the entire content in the main container style
@@ -237,45 +202,6 @@ export async function getReminderEmail(params: {
 }
 
 
-export function getConfirmationEmailHtml(
-  ownerName: string,
-  unitNo: string,
-  pollTitle: string,
-  dateFormatted: string,
-  answersSummary: { qNo: number; qTitle: string; answerText: string }[]
-): string {
-  const answersListHtml = answersSummary
-    .map(
-      a => `
-      <li style="margin-bottom: 8px;">
-        <strong>Otázka ${a.qNo}:</strong> ${a.qTitle} <br/>
-        Odpoveď: <span style="font-weight: bold; color: ${
-          a.answerText === "Súhlasím" ? "#2E7D5B" : a.answerText === "Nesúhlasím" ? "#B23A48" : "#6B6254"
-        }">${a.answerText}</span>
-      </li>
-    `
-    )
-    .join("");
-
-  return `
-    <div style="font-family: sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA;">
-      <h2 style="font-family: Georgia, serif; color: #2E7D5B; margin-top: 0;">Potvrdenie o hlasovaní</h2>
-      <p>Vážený vlastník <strong>${ownerName}</strong>,</p>
-      <p>potvrdzujeme prijatie Vášho hlasu za byt/NP <strong>č. ${unitNo}</strong> v hlasovaní:</p>
-
-      <div style="background: #ffffff; padding: 15px; border-radius: 8px; border: 1px solid #E5DFD3; margin: 15px 0;">
-        <h3 style="margin-top: 0; color: #1F3A5F; font-size: 16px;">${pollTitle}</h3>
-        <p style="color: #606673; font-size: 13px; margin-bottom: 12px;">Prijaté dňa: ${dateFormatted}</p>
-        <ul style="padding-left: 20px; margin: 0;">
-          ${answersListHtml}
-        </ul>
-      </div>
-
-      <p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu. Do uzávierky môžete svoje rozhodnutie zmeniť opätovným otvorením Vášho magic-linku v pôvodnom e-maile.</p>
-    </div>
-  `;
-}
-
 export async function getInvitationEmail(params: {
   ownerName: string;
   buildingName: string;
@@ -330,13 +256,21 @@ export async function getInvitationEmail(params: {
   };
 }
 
-export async function getProtocolEmail(params: {
+export interface ProtocolEmailParams {
   ownerName: string;
   buildingName: string;
   pollTitle: string;
   protocolLink: string;
-}) {
-  let template = await db.emailTemplate.findUnique({
+}
+
+export interface EmailTemplateContent {
+  subject: string;
+  body: string;
+}
+
+/** Loads the protocol email template once — reuse it for all recipients. */
+export async function getProtocolEmailTemplate(): Promise<EmailTemplateContent> {
+  const template = await db.emailTemplate.findUnique({
     where: { key: "protocol" }
   });
 
@@ -362,6 +296,11 @@ export async function getProtocolEmail(params: {
     body = template.body;
   }
 
+  return { subject, body };
+}
+
+/** Renders the protocol email for one recipient from an already-loaded template. */
+export function renderProtocolEmail(template: EmailTemplateContent, params: ProtocolEmailParams) {
   const replaceAll = (str: string) => {
     return str
       .replace(/{ownerName}/g, params.ownerName)
@@ -371,9 +310,14 @@ export async function getProtocolEmail(params: {
   };
 
   return {
-    subject: replaceAll(subject),
-    html: applyEmailStyles(replaceAll(body))
+    subject: replaceAll(template.subject),
+    html: applyEmailStyles(replaceAll(template.body))
   };
+}
+
+export async function getProtocolEmail(params: ProtocolEmailParams) {
+  const template = await getProtocolEmailTemplate();
+  return renderProtocolEmail(template, params);
 }
 
 export async function getCredentialsEmail(params: {

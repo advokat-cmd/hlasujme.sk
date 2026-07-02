@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { validateVoteToken } from "@/lib/tokens";
 import { db } from "@/lib/db";
-import { VoteAnswer } from "@prisma/client";
+import { VoteAnswer, Prisma } from "@prisma/client";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { sendEmail, getConfirmationEmail } from "@/lib/email";
@@ -47,8 +47,10 @@ export async function POST(
       }
     }
 
-    // 2. Perform votes insertion inside a database transaction to ensure versioning integrity
-    await db.$transaction(async (tx) => {
+    // 2. Perform votes insertion inside a database transaction to ensure versioning integrity.
+    // Concurrent submissions with the same token can race on the version unique
+    // constraint (P2002) — retry once so the voter does not get a spurious error.
+    const runVoteTransaction = () => db.$transaction(async (tx) => {
       for (const q of poll.questions) {
         const answer = answers[String(q.no)];
         if (!answer) continue;
@@ -118,6 +120,15 @@ export async function POST(
         });
       }
     });
+
+    try {
+      await runVoteTransaction();
+    } catch (txErr) {
+      const isVersionConflict =
+        txErr instanceof Prisma.PrismaClientKnownRequestError && txErr.code === "P2002";
+      if (!isVersionConflict) throw txErr;
+      await runVoteTransaction();
+    }
 
     if (finalize) {
       // 3. Log to audit chain (outside the transaction, so if transaction commits, log is registered)

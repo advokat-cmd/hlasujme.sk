@@ -1,12 +1,28 @@
 import { cookies } from "next/headers";
 
 const SESSION_COOKIE_NAME = "hlasovanie_session";
-const SESSION_SECRET = process.env.SESSION_SECRET || "default-fallback-secret-that-must-be-changed-in-prod";
+
+/**
+ * Returns the HMAC secret for session cookies and signed download links.
+ * In production a missing/weak SESSION_SECRET is a fatal misconfiguration —
+ * a known fallback secret would let anyone forge an admin session.
+ */
+export function getSessionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (secret && secret.length >= 16) {
+    return secret;
+  }
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET musí byť nastavený (min. 16 znakov) — bez neho sa dajú sfalšovať admin session cookies.");
+  }
+  console.warn("SESSION_SECRET nie je nastavený — používa sa nechránený DEV fallback.");
+  return "dev-only-insecure-secret";
+}
 
 // Helper to sign/verify tokens using standard Web Crypto API (HMAC SHA-256)
 async function getCryptoKey(): Promise<CryptoKey> {
   const enc = new TextEncoder();
-  const keyData = enc.encode(SESSION_SECRET);
+  const keyData = enc.encode(getSessionSecret());
   return crypto.subtle.importKey(
     "raw",
     keyData,
@@ -81,7 +97,8 @@ export async function setAdminSession(session: AdminSession): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    // Secure by default — only plain-HTTP local dev opts out
+    secure: process.env.NODE_ENV !== "development",
     sameSite: "lax",
     path: "/",
     maxAge: 60 * 60 * 24 * 7 // 7 days

@@ -6,39 +6,45 @@ export interface AuditPayload {
   [key: string]: any;
 }
 
+// Arbitrary application-wide lock key for serializing audit chain appends
+const AUDIT_CHAIN_LOCK_KEY = 874219031;
+
 export async function createAuditLogEntry(
   action: string,
   actor: string,
   payload: AuditPayload
 ) {
-  // Fetch the latest audit log entry to get its entryHash
-  const latestEntry = await db.auditLog.findFirst({
-    orderBy: { createdAt: "desc" }
+  // Serialize chain appends with a Postgres advisory lock — two concurrent
+  // writers would otherwise read the same "latest" entry and fork the chain.
+  return db.$transaction(async (tx) => {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
+
+    const latestEntry = await tx.auditLog.findFirst({
+      orderBy: { createdAt: "desc" }
+    });
+
+    const prevHash = latestEntry
+      ? latestEntry.entryHash
+      : "0000000000000000000000000000000000000000000000000000000000000000";
+
+    const createdAt = new Date();
+    const payloadStr = JSON.stringify(payload);
+
+    // Compute entryHash = SHA-256(prevHash + action + actor + payloadStr + createdAt.toISOString())
+    const hashInput = `${prevHash}${action}${actor}${payloadStr}${createdAt.toISOString()}`;
+    const entryHash = crypto.createHash("sha256").update(hashInput).digest("hex");
+
+    return tx.auditLog.create({
+      data: {
+        action,
+        actor,
+        payload: payloadStr,
+        prevHash,
+        entryHash,
+        createdAt
+      }
+    });
   });
-
-  const prevHash = latestEntry 
-    ? latestEntry.entryHash 
-    : "0000000000000000000000000000000000000000000000000000000000000000";
-
-  const createdAt = new Date();
-  const payloadStr = JSON.stringify(payload);
-
-  // Compute entryHash = SHA-256(prevHash + action + actor + payloadStr + createdAt.toISOString())
-  const hashInput = `${prevHash}${action}${actor}${payloadStr}${createdAt.toISOString()}`;
-  const entryHash = crypto.createHash("sha256").update(hashInput).digest("hex");
-
-  const entry = await db.auditLog.create({
-    data: {
-      action,
-      actor,
-      payload: payloadStr,
-      prevHash,
-      entryHash,
-      createdAt
-    }
-  });
-
-  return entry;
 }
 
 // Function to verify the integrity of the audit chain

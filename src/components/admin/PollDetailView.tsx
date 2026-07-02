@@ -38,6 +38,8 @@ interface PollDetailViewProps {
     sealedResult?: {
       pdfPath: string;
       sha256: string;
+      driveFileId?: string | null;
+      driveWebViewLink?: string | null;
     } | null;
     protocolEmailLogs?: ProtocolEmailLog[];
   };
@@ -137,6 +139,32 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       setProtocolError("Chyba sieťového pripojenia.");
     } finally {
       setSendingProtocol(false);
+    }
+  };
+
+  const [retryingDrive, setRetryingDrive] = useState(false);
+
+  const handleRetryDriveUpload = async () => {
+    setRetryingDrive(true);
+    setProtocolError("");
+    setProtocolSuccess("");
+
+    try {
+      const res = await fetch(`/api/admin/poll/${poll.id}/retry-drive-upload`, {
+        method: "POST",
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setProtocolError(data.error || "Nahratie na Google Drive zlyhalo.");
+      } else {
+        setProtocolSuccess("Zápisnica bola úspešne nahratá na Google Drive.");
+        router.refresh();
+      }
+    } catch (err) {
+      setProtocolError("Chyba sieťového pripojenia.");
+    } finally {
+      setRetryingDrive(false);
     }
   };
 
@@ -565,13 +593,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       <div
         role="tablist"
         aria-label="Sekcie hlasovania"
-        style={{
-          display: "flex",
-          gap: 2,
-          borderBottom: "1px solid var(--line)",
-          marginBottom: 26,
-          overflowX: "auto",
-        }}
+        className="admin-tab-list"
       >
         {tabs.map((t) => (
           <button
@@ -579,23 +601,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
             role="tab"
             aria-selected={tab === t.id}
             onClick={() => handleTabChange(t.id)}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 7,
-              flexShrink: 0,
-              whiteSpace: "nowrap",
-              padding: "11px 16px",
-              border: "none",
-              background: "transparent",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: "13.5px",
-              fontWeight: 600,
-              color: tab === t.id ? "var(--ink)" : "var(--ink-soft)",
-              borderBottom: tab === t.id ? "2px solid var(--accent)" : "2px solid transparent",
-              marginBottom: -1,
-            }}
+            className="admin-tab-btn"
           >
             <Ic name={t.icon} size={16} />
             {t.label}
@@ -1468,8 +1474,30 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                       {protocolSuccess}
                     </div>
                   )}
+
+                  {poll.sealedResult && !poll.sealedResult.driveFileId && (
+                    <div style={{ color: "var(--accent-ink)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <Ic name="alert" size={14} />
+                      <span>Zápisnica zatiaľ nie je zálohovaná na Google Drive.</span>
+                      <Btn kind="secondary" size="sm" disabled={retryingDrive} onClick={handleRetryDriveUpload}>
+                        {retryingDrive ? "Nahrávam..." : "Nahrať na Drive"}
+                      </Btn>
+                    </div>
+                  )}
+
+                  {poll.sealedResult?.driveWebViewLink && (
+                    <div style={{ color: "var(--agree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
+                      <Ic name="checkCircle" size={14} />
+                      <span>
+                        Zálohované na Google Drive —{" "}
+                        <a href={poll.sealedResult.driveWebViewLink} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
+                          zobraziť súbor
+                        </a>
+                      </span>
+                    </div>
+                  )}
                 </div>
-                
+
                 <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
                   {poll.sealedResult && (
                     <a href={`/api/sealed/${poll.id}/pdf`} style={{ textDecoration: "none" }}>

@@ -2,7 +2,7 @@ import React from "react";
 import { redirect, notFound } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { getEffectiveUnitVote, tallyQuestion } from "@/lib/engine";
+import { computePollResults } from "@/lib/engine";
 import { PollDetailView } from "@/components/admin/PollDetailView";
 
 export const revalidate = 0; // Ensure data is loaded fresh from database
@@ -43,10 +43,13 @@ export default async function AdminPollDetailPage({
     include: { owners: true }
   });
 
-  // 4. Calculate Question Tallies
+  // 4. Calculate Question Tallies (batched — constant query count)
+  const { tallies, effectiveVotes } = await computePollResults(pollId);
+
   const questionsTallies = [];
   for (const q of poll.questions) {
-    const tally = await tallyQuestion(pollId, q.id);
+    const tally = tallies.get(q.no);
+    if (!tally) continue;
     questionsTallies.push({
       id: q.id,
       no: q.no,
@@ -75,9 +78,9 @@ export default async function AdminPollDetailPage({
     const unitAnswers = [];
     let isDisputedOnAny = false;
 
-    // Get answer for each question
+    // Get answer for each question (precomputed)
     for (const q of poll.questions) {
-      const eff = await getEffectiveUnitVote(pollId, u.id, q.no);
+      const eff = effectiveVotes.get(u.id)?.get(q.no) || { answer: null, disputed: false, note: null };
       if (eff.disputed) {
         isDisputedOnAny = true;
       }
@@ -197,7 +200,9 @@ export default async function AdminPollDetailPage({
         status: poll.status,
         sealedResult: poll.sealedResult ? {
           pdfPath: poll.sealedResult.pdfPath,
-          sha256: poll.sealedResult.sha256
+          sha256: poll.sealedResult.sha256,
+          driveFileId: poll.sealedResult.driveFileId,
+          driveWebViewLink: poll.sealedResult.driveWebViewLink
         } : null,
         protocolEmailLogs: poll.protocolEmailLogs.map(l => ({
           id: l.id,
