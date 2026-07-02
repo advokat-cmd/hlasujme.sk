@@ -159,7 +159,16 @@ export default async function AdminSettingsPage() {
     note: t.note || ""
   }));
 
-  const mappedEmailTemplates = emailTemplates.map(t => ({
+  const order = ["invitation", "reminder", "confirmation", "protocol", "credentials"];
+  const sortedEmailTemplates = [...emailTemplates].sort((a, b) => {
+    let idxA = order.indexOf(a.key);
+    let idxB = order.indexOf(b.key);
+    if (idxA === -1) idxA = 999;
+    if (idxB === -1) idxB = 999;
+    return idxA - idxB;
+  });
+
+  const mappedEmailTemplates = sortedEmailTemplates.map(t => ({
     key: t.key,
     subject: t.subject,
     body: t.body

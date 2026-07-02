@@ -535,8 +535,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
       {activeTab === "emails" && (
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           {emailTemplates && emailTemplates.length > 0 ? (
-            emailTemplates.map((et) => (
-              <Card key={et.key} pad={20}>
+            [...emailTemplates]
+              .sort((a, b) => {
+                const order = ["invitation", "reminder", "confirmation", "protocol", "credentials"];
+                let idxA = order.indexOf(a.key);
+                let idxB = order.indexOf(b.key);
+                if (idxA === -1) idxA = 999;
+                if (idxB === -1) idxB = 999;
+                return idxA - idxB;
+              })
+              .map((et) => (
+                <Card key={et.key} pad={20}>
                 <div style={{ display: "flex", alignItems: "flex-start", gap: 14 }}>
                   <div
                     style={{
