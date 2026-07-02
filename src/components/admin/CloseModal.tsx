@@ -41,7 +41,6 @@ export const CloseModal: React.FC<CloseModalProps> = ({
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [sendEmails, setSendEmails] = useState(true);
 
   const handleClosePoll = async () => {
     setLoading(true);
@@ -51,7 +50,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
       const res = await fetch(`/api/admin/poll/${pollId}/close`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sendEmails }),
+        body: JSON.stringify({}),
       });
 
       const data = await res.json();
@@ -184,36 +183,6 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   </div>
                 );
               })}
-              <label
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                  fontSize: "13.5px",
-                  fontWeight: 600,
-                  color: "var(--ink)",
-                  cursor: "pointer",
-                  userSelect: "none",
-                  background: "var(--paper-2)",
-                  padding: "10px 12px",
-                  borderRadius: 8,
-                  border: "1px solid var(--line)",
-                  marginTop: 6,
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={sendEmails}
-                  onChange={(e) => setSendEmails(e.target.checked)}
-                  style={{
-                    width: 16,
-                    height: 16,
-                    cursor: "pointer",
-                    accentColor: "var(--primary)"
-                  }}
-                />
-                <span>Odoslať e-mailové oznámenie s výsledkami vlastníkom</span>
-              </label>
               <div
                 style={{
                   fontSize: "12.5px",
@@ -222,9 +191,10 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   background: "var(--paper-2)",
                   padding: "10px 12px",
                   borderRadius: 8,
+                  marginTop: 6,
                 }}
               >
-                Po potvrdení sa vygeneruje finálna PDF zápisnica. {sendEmails ? "Výsledky s odkazom na zápisnicu budú odoslané vlastníkom e-mailom." : "Výsledky nebudú odoslané e-mailom, no vlastníci si ich môžu pozrieť po prihlásení do systému."} Archív je nemenný — prípadná oprava sa rieši dodatkom.
+                Po potvrdení sa vygeneruje finálna PDF zápisnica a zálohuje sa na Google Drive. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — po úspešnom zálohovaní ich odošlete tlačidlom „Odoslať vlastníkom" v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
               </div>
             </div>
           )}
@@ -239,8 +209,8 @@ export const CloseModal: React.FC<CloseModalProps> = ({
               Uzavrieť a vyhodnotiť
             </Btn>
           ) : (
-            <Btn kind="primary" icon="send" onClick={handleClosePoll} disabled={loading}>
-              {loading ? "Uzatváram..." : "Potvrdiť a odoslať výsledky"}
+            <Btn kind="primary" icon="lock" onClick={handleClosePoll} disabled={loading}>
+              {loading ? "Uzatváram..." : "Potvrdiť a uzavrieť hlasovanie"}
             </Btn>
           )}
         </div>

@@ -41,9 +41,8 @@ interface UnitVoteDetails {
   no: string;
   ownerName: string;
   coMode: string;
-  q1: string;
-  q2: string;
-  q3: string;
+  /** Answer label per question, in poll question order */
+  answers: string[];
 }
 
 const EMPTY_EFFECTIVE: EffectiveVote = { answer: null, disputed: false, note: null };
@@ -117,9 +116,7 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
       no: u.no,
       ownerName,
       coMode: u.coMode,
-      q1: mapAnswerLabel(perQuestion?.get(1) || EMPTY_EFFECTIVE),
-      q2: mapAnswerLabel(perQuestion?.get(2) || EMPTY_EFFECTIVE),
-      q3: mapAnswerLabel(perQuestion?.get(3) || EMPTY_EFFECTIVE)
+      answers: poll.questions.map(q => mapAnswerLabel(perQuestion?.get(q.no) || EMPTY_EFFECTIVE))
     };
   });
 
@@ -180,8 +177,13 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
       doc.text(t(`Požadovaná väčšina: ${majLabel}`), { indent: 15 });
       doc.text(t(`Potrebné ZA: ${r.need} hlasov, Celkový počet hlasov v dome: ${r.total}`), { indent: 15 });
 
-      const resultText = `Súhlasilo: ${r.agree} (ZA) · Nesúhlasilo: ${r.disagree} (PROTI) · Zdržalo sa: ${r.abstain} · Nehlasovalo: ${r.none} · Sporné: ${r.disputed}`;
-      doc.text(t(resultText), { indent: 15 });
+      doc.moveDown(0.2);
+      doc.text(t(`Súhlasilo (ZA): ${r.agree}`), { indent: 15 });
+      doc.text(t(`Nesúhlasilo (PROTI): ${r.disagree}`), { indent: 15 });
+      doc.text(t(`Zdržalo sa: ${r.abstain}`), { indent: 15 });
+      doc.text(t(`Nehlasovalo: ${r.none}`), { indent: 15 });
+      doc.text(t(`Sporné: ${r.disputed}`), { indent: 15 });
+      doc.moveDown(0.2);
 
       const statusColor = r.status === "Schválené" ? "#2E7D5B" : "#B23A48";
       doc.fillColor(statusColor).text(t(`Výsledok: ${r.status}`), { indent: 15, stroke: true });
@@ -198,13 +200,21 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
 
     doc.fontSize(9);
 
+    // Question columns are laid out dynamically — only the questions that
+    // were actually declared for this poll appear in the annex.
+    const questionCount = poll.questions.length;
+    const colStartX = 270;
+    const colEndX = 540;
+    const colWidth = questionCount > 0 ? (colEndX - colStartX) / questionCount : 0;
+    const colX = (i: number) => colStartX + i * colWidth;
+
     const drawTableHeader = (y: number): number => {
       doc.text(bold("Jedn."), 50, y);
       doc.text(bold("Vlastník / Režim"), 90, y);
-      doc.text(bold("Otázka 1"), 270, y);
-      doc.text(bold("Otázka 2"), 340, y);
-      doc.text(bold("Otázka 3"), 410, y);
-      doc.strokeColor("#E5DFD3").lineWidth(1).moveTo(50, y + 12).lineTo(500, y + 12).stroke();
+      poll.questions.forEach((q, i) => {
+        doc.text(bold(`Otázka ${q.no}`), colX(i), y);
+      });
+      doc.strokeColor("#E5DFD3").lineWidth(1).moveTo(50, y + 12).lineTo(colEndX, y + 12).stroke();
       useRegular();
       return y + 18;
     };
@@ -230,12 +240,12 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
         return "#5C6473";
       };
 
-      doc.fillColor(getChoiceColor(uv.q1)).text(t(uv.q1), 270, currentY);
-      doc.fillColor(getChoiceColor(uv.q2)).text(t(uv.q2), 340, currentY);
-      doc.fillColor(getChoiceColor(uv.q3)).text(t(uv.q3), 410, currentY);
+      uv.answers.forEach((answer, i) => {
+        doc.fillColor(getChoiceColor(answer)).text(t(answer), colX(i), currentY);
+      });
       doc.fillColor("#1B2330");
 
-      doc.strokeColor("#ECE7DC").lineWidth(0.5).moveTo(50, currentY + 10).lineTo(500, currentY + 10).stroke();
+      doc.strokeColor("#ECE7DC").lineWidth(0.5).moveTo(50, currentY + 10).lineTo(colEndX, currentY + 10).stroke();
 
       currentY += 16;
     }

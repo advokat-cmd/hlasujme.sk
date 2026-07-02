@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { createAuditLogEntry } from "@/lib/hashChain";
-import { uploadFileToDrive, createDriveFolder } from "@/lib/gdrive";
+import { uploadFileToDrive, createDriveFolder, listFilesInFolder } from "@/lib/gdrive";
 import fs from "fs";
 import path from "path";
 
@@ -39,35 +39,50 @@ export async function POST(
       return NextResponse.json({ error: "Google Drive nie je nakonfigurovaný (chýbajú prístupové údaje)." }, { status: 400 });
     }
 
-    // Load the sealed PDF from local storage
     const fileName = path.basename(poll.sealedResult.pdfPath);
-    const absolutePath = path.join(process.cwd(), "storage", "sealed", fileName);
 
-    if (!fs.existsSync(absolutePath)) {
-      return NextResponse.json({ error: "Lokálny súbor zápisnice nebol nájdený, nahratie nie je možné." }, { status: 404 });
-    }
-
-    const pdfBuffer = fs.readFileSync(absolutePath);
-
-    // Ensure the poll has a Drive folder
-    let driveFolderId = poll.driveFolderId;
-    if (!driveFolderId) {
-      driveFolderId = await createDriveFolder(`${poll.building.name} — ${poll.title}`);
-      if (driveFolderId) {
-        await db.poll.update({
-          where: { id: pollId },
-          data: { driveFolderId }
-        });
+    // 1. Polls sealed by an older app version already have the protocol on
+    // Drive, just untracked — look for it first and simply link it.
+    let driveFile: { id: string; webViewLink: string } | null = null;
+    if (poll.driveFolderId) {
+      const existing = await listFilesInFolder(poll.driveFolderId);
+      const match = existing.find(f =>
+        f.name === fileName ||
+        (/z[áa]pisnica/i.test(f.name) && f.name.toLowerCase().endsWith(".pdf"))
+      );
+      if (match) {
+        driveFile = { id: match.id, webViewLink: match.webViewLink };
       }
     }
 
-    if (!driveFolderId) {
-      return NextResponse.json({ error: "Nepodarilo sa vytvoriť Google Drive priečinok." }, { status: 502 });
-    }
-
-    const driveFile = await uploadFileToDrive(driveFolderId, fileName, "application/pdf", pdfBuffer);
+    // 2. Otherwise upload the local file
     if (!driveFile) {
-      return NextResponse.json({ error: "Nahratie na Google Drive zlyhalo. Skúste to znova." }, { status: 502 });
+      const absolutePath = path.join(process.cwd(), "storage", "sealed", fileName);
+      if (!fs.existsSync(absolutePath)) {
+        return NextResponse.json({ error: "Lokálny súbor zápisnice nebol nájdený, nahratie nie je možné." }, { status: 404 });
+      }
+      const pdfBuffer = fs.readFileSync(absolutePath);
+
+      // Ensure the poll has a Drive folder
+      let driveFolderId = poll.driveFolderId;
+      if (!driveFolderId) {
+        driveFolderId = await createDriveFolder(`${poll.building.name} — ${poll.title}`);
+        if (driveFolderId) {
+          await db.poll.update({
+            where: { id: pollId },
+            data: { driveFolderId }
+          });
+        }
+      }
+
+      if (!driveFolderId) {
+        return NextResponse.json({ error: "Nepodarilo sa vytvoriť Google Drive priečinok." }, { status: 502 });
+      }
+
+      driveFile = await uploadFileToDrive(driveFolderId, fileName, "application/pdf", pdfBuffer);
+      if (!driveFile) {
+        return NextResponse.json({ error: "Nahratie na Google Drive zlyhalo. Skúste to znova." }, { status: 502 });
+      }
     }
 
     await db.sealedResult.update({

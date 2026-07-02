@@ -8,7 +8,6 @@ import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { uploadFileToDrive } from "@/lib/gdrive";
-import { sendProtocolEmails } from "@/lib/protocolEmail";
 
 export async function POST(
   request: Request,
@@ -22,15 +21,6 @@ export async function POST(
     }
 
     const { id: pollId } = await params;
-
-    // Parse request body for optional sendEmails parameter
-    let sendEmails = false;
-    try {
-      const body = await request.json();
-      sendEmails = !!body.sendEmails;
-    } catch {
-      // Body is empty or malformed
-    }
 
     // 2. Fetch the poll with building details
     const poll = await db.poll.findUnique({
@@ -155,22 +145,11 @@ export async function POST(
       }
     );
 
-    // 9. Optionally send email notification to owners (shared, dedup-safe logic)
-    let successCount = 0;
-    if (sendEmails) {
-      try {
-        const summary = await sendProtocolEmails(pollId, `admin:${session.email}`);
-        successCount = summary.sentCount;
-      } catch (emailErr) {
-        console.error("Failed to send protocol emails after close:", emailErr);
-      }
-    }
-
+    // Results are NOT emailed here — the admin sends them explicitly from the
+    // protocol tab once the Drive backup is confirmed.
     return NextResponse.json({
       success: true,
       sha256,
-      emailsSent: sendEmails,
-      successCount,
       driveUploaded: !!driveFile,
       driveConfigured,
       driveError: driveErrorMessage

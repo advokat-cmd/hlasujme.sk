@@ -49,7 +49,10 @@ export async function GET(
       const poll = await db.poll.findUnique({ where: { id: pollId } });
       if (poll?.driveFolderId) {
         const files = await listFilesInFolder(poll.driveFolderId);
-        const pdfFile = files.find(f => f.name === fileName || f.name.endsWith(".pdf"));
+        const pdfFile = files.find(f =>
+          f.name === fileName ||
+          (/z[áa]pisnica/i.test(f.name) && f.name.toLowerCase().endsWith(".pdf"))
+        );
         if (pdfFile) {
           fileBuffer = await downloadFileFromDrive(pdfFile.id);
         }

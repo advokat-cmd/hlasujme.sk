@@ -1405,7 +1405,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         <div>
           {poll.status === "active" ? (
             <Card style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
                   style={{
                     width: 40,
@@ -1421,7 +1421,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 >
                   <Ic name="lock" size={20} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                   <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 5px" }}>
                     Hlasovanie ešte prebieha
                   </h3>
@@ -1437,7 +1437,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
             </Card>
           ) : (
             <Card style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
+              <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
                   style={{
                     width: 40,
@@ -1453,14 +1453,16 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 >
                   <Ic name="checkCircle" size={20} />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                   <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 5px" }}>
                     Hlasovanie bolo uzavreté a výsledky sú zapečatené
                   </h3>
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
-                    Zápisnica bola úspešne vygenerovaná. Môžete ju stiahnuť nižšie alebo odoslať odkaz na stiahnutie všetkým vlastníkom.
+                    {poll.sealedResult?.driveFileId
+                      ? "Zápisnica bola úspešne vygenerovaná a zálohovaná. Môžete ju stiahnuť alebo odoslať odkaz na stiahnutie všetkým vlastníkom."
+                      : "Zápisnica bola úspešne vygenerovaná. Po zálohovaní na Google Drive ju budete môcť odoslať vlastníkom."}
                   </p>
-                  
+
                   {protocolError && (
                     <div style={{ color: "var(--disagree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
                       <Ic name="alert" size={14} />
@@ -1476,18 +1478,20 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                   )}
 
                   {poll.sealedResult && !poll.sealedResult.driveFileId && (
-                    <div style={{ color: "var(--accent-ink)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                      <Ic name="alert" size={14} />
-                      <span>Zápisnica zatiaľ nie je zálohovaná na Google Drive.</span>
+                    <div style={{ color: "var(--accent-ink)", fontSize: "12.5px", marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                      <Ic name="alert" size={14} style={{ flexShrink: 0 }} />
+                      <span style={{ flex: "1 1 200px" }}>
+                        Zápisnica zatiaľ nie je zálohovaná na Google Drive. Odoslanie vlastníkom bude možné po úspešnom zálohovaní.
+                      </span>
                       <Btn kind="secondary" size="sm" disabled={retryingDrive} onClick={handleRetryDriveUpload}>
-                        {retryingDrive ? "Nahrávam..." : "Nahrať na Drive"}
+                        {retryingDrive ? "Zálohujem..." : "Zálohovať na Drive"}
                       </Btn>
                     </div>
                   )}
 
                   {poll.sealedResult?.driveWebViewLink && (
-                    <div style={{ color: "var(--agree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4 }}>
-                      <Ic name="checkCircle" size={14} />
+                    <div style={{ color: "var(--agree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+                      <Ic name="checkCircle" size={14} style={{ flexShrink: 0 }} />
                       <span>
                         Zálohované na Google Drive —{" "}
                         <a href={poll.sealedResult.driveWebViewLink} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
@@ -1498,7 +1502,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                   )}
                 </div>
 
-                <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0, maxWidth: "100%" }}>
                   {poll.sealedResult && (
                     <a href={`/api/sealed/${poll.id}/pdf`} style={{ textDecoration: "none" }}>
                       <Btn kind="secondary" icon="download">
@@ -1506,14 +1510,16 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                       </Btn>
                     </a>
                   )}
-                  <Btn
-                    kind="primary"
-                    icon="send"
-                    disabled={sendingProtocol}
-                    onClick={handleSendProtocolToOwners}
-                  >
-                    {sendingProtocol ? "Odosielam..." : "Odoslať vlastníkom"}
-                  </Btn>
+                  {poll.sealedResult?.driveFileId && (
+                    <Btn
+                      kind="primary"
+                      icon="send"
+                      disabled={sendingProtocol}
+                      onClick={handleSendProtocolToOwners}
+                    >
+                      {sendingProtocol ? "Odosielam..." : "Odoslať vlastníkom"}
+                    </Btn>
+                  )}
                 </div>
               </div>
             </Card>
