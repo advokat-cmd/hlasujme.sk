@@ -20,6 +20,7 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           script: |
+            set -e
             cd /var/www/hlasovanie
             git config --global --add safe.directory /var/www/hlasovanie
             git fetch --all
@@ -33,6 +34,7 @@ jobs:
             npx prisma db push
             
             # Build the Next.js application
+            export NODE_OPTIONS="--max-old-space-size=3072"
             npm run build
             
             # Restart the systemd service
