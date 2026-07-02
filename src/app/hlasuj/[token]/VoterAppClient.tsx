@@ -493,21 +493,7 @@ function VIntro({ poll, unit, building, voterName, inProgress, onStart }: VIntro
               </span>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>{q.title}</div>
-                {q.attachments && q.attachments.length > 0 && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 5,
-                      fontSize: 11.5,
-                      color: "var(--primary)",
-                      marginTop: 5,
-                    }}
-                  >
-                    <Ic name="doc" size={13} /> {q.attachments.length}{" "}
-                    {q.attachments.length === 1 ? "príloha" : "prílohy"} na stiahnutie
-                  </div>
-                )}
+
               </div>
             </div>
           ))}
