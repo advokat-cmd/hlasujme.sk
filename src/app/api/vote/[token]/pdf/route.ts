@@ -114,9 +114,13 @@ export async function GET(
       doc.fontSize(11).text(clean(poll.title), { align: "center" });
       doc.moveDown(1.5);
 
-      // Metadata box
       doc.fontSize(10);
-      doc.text(clean("Bytový dom: "), { continued: true }).text(boldClean(`${unit.building.name}, ${unit.building.address}`)); regular();
+      const vchod = unit.building.short || unit.building.entrance || "";
+      doc.text(clean("Vchod: "), { continued: true })
+        .text(boldClean(vchod), { continued: true })
+        .text(clean(", bytový dom: "), { continued: true })
+        .text(boldClean(unit.building.address));
+      regular();
       doc.text(clean("Jednotka: "), { continued: true }).text(boldClean(`Byt č. ${unit.no}`)); regular();
       doc.text(clean("Hlasujúci: "), { continued: true }).text(boldClean(voterName)); regular();
       
