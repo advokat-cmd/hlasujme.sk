@@ -694,7 +694,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                             {q.attachments.map((url, uIdx) => {
                               const fileInfo = files.find(f => f.webViewLink === url);
                               const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
-                              const href = fileId ? `/api/file/${fileId}` : url;
+                              const href = url.startsWith("/api/") ? url : (fileId ? `/api/file/${fileId}` : url);
                               const displayName = fileInfo ? fileInfo.name : "Podkladový dokument";
                               return (
                                 <a
@@ -763,7 +763,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                             {q.attachments.map((url, uIdx) => {
                               const fileInfo = files.find(f => f.webViewLink === url);
                               const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
-                              const href = fileId ? `/api/file/${fileId}` : url;
+                              const href = url.startsWith("/api/") ? url : (fileId ? `/api/file/${fileId}` : url);
                               const displayName = fileInfo ? fileInfo.name : "Podkladový dokument (Google Drive)";
                               return (
                                 <a
@@ -882,7 +882,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     {q.attachments.map((a, i) => {
                       const fileInfo = files.find(f => f.name === a || f.webViewLink === a);
                       const fileId = fileInfo ? fileInfo.id : (a.startsWith("http") ? extractDriveFileId(a) : null);
-                      const href = fileId ? `/api/file/${fileId}` : "#";
+                      const href = a.startsWith("/api/") ? a : (fileId ? `/api/file/${fileId}` : "#");
                       const displayName = fileInfo ? fileInfo.name : a;
 
                       return (
@@ -1684,7 +1684,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
             {loadingFiles ? (
               <div style={{ padding: "20px 0", textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>
-                Načítavam súbory z Google Drive...
+                Načítavam dokumenty...
               </div>
             ) : files.length === 0 ? (
               <div style={{ padding: "30px 10px", textAlign: "center", color: "var(--ink-soft)", fontSize: 14 }}>

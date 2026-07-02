@@ -164,8 +164,24 @@ export default async function VoterPage({ params }: PageProps) {
     });
   }
 
-  // 4. Serialize data structures to bypass Date object transmission errors to client component
-  const driveFiles = poll.driveFolderId ? await listFilesInFolder(poll.driveFolderId) : [];
+  // 4. Poll documents: server-stored documents from DB are the primary source;
+  // legacy polls (documents only in the Drive folder) fall back to a live listing.
+  const documents = await db.pollDocument.findMany({
+    where: { pollId: poll.id },
+    orderBy: { createdAt: "asc" }
+  });
+
+  let driveFiles: Array<{ id: string; name: string; webViewLink: string; mimeType: string }> =
+    documents.map(d => ({
+      id: d.id,
+      name: d.name,
+      webViewLink: `/api/document/${d.id}`,
+      mimeType: d.mimeType
+    }));
+
+  if (driveFiles.length === 0 && poll.driveFolderId) {
+    driveFiles = await listFilesInFolder(poll.driveFolderId);
+  }
 
   const serializedPoll = {
     id: poll.id,

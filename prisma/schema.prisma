@@ -149,6 +149,25 @@ model Poll {
   subvotes          CoownerSubvote[]
   sealedResult      SealedResult?
   protocolEmailLogs ProtocolEmailLog[]
+  documents         PollDocument[]
+}
+
+// Supporting document attached to a poll. Stored primarily on the server
+// (storage/uploads), with Google Drive as a best-effort backup.
+model PollDocument {
+  id          String   @id @default(uuid())
+  pollId      String
+  poll        Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
+  questionNo  Int?     // optional link to a specific question
+  name        String   // original file name shown to users
+  mimeType    String
+  size        Int      @default(0)
+  localPath   String?  // relative path under storage/uploads
+  driveFileId String?
+  webViewLink String?
+  createdAt   DateTime @default(now())
+
+  @@index([pollId])
 }
 
 enum MajorityType {

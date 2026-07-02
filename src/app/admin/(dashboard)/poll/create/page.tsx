@@ -187,33 +187,37 @@ export default function CreatePollPage() {
         setLoading(false);
       } else {
         const pollId = data.pollId;
-        // Upload question-specific attachments if any
+        // Upload question-specific attachments if any. The upload endpoint
+        // stores the file on the server and links it to the question itself.
+        const failedUploads: string[] = [];
         for (let i = 0; i < questions.length; i++) {
           const q = questions[i];
           if (q.file) {
             try {
               const formData = new FormData();
               formData.append("file", q.file);
+              formData.append("questionNo", String(i + 1));
 
               const uploadRes = await fetch(`/api/admin/poll/${pollId}/upload`, {
                 method: "POST",
                 body: formData,
               });
 
-              if (uploadRes.ok) {
-                const uploadData = await uploadRes.json();
-                const webViewLink = uploadData.file.webViewLink;
-
-                await fetch(`/api/admin/poll/${pollId}/question/${i + 1}/attach`, {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ attachmentUrl: webViewLink }),
-                });
+              if (!uploadRes.ok) {
+                const uploadData = await uploadRes.json().catch(() => ({}));
+                failedUploads.push(`Otázka ${i + 1}: ${q.file.name} (${uploadData.error || "nahrávanie zlyhalo"})`);
               }
             } catch (uploadErr) {
               console.error(`Failed to upload attachment for question ${i + 1}:`, uploadErr);
+              failedUploads.push(`Otázka ${i + 1}: ${q.file.name} (chyba pripojenia)`);
             }
           }
+        }
+
+        if (failedUploads.length > 0) {
+          alert(
+            `Hlasovanie bolo vytvorené, ale niektoré prílohy sa nepodarilo nahrať:\n\n${failedUploads.join("\n")}\n\nMôžete ich nahrať dodatočne v záložke „Podklady a dokumenty".`
+          );
         }
 
         router.push(`/admin/poll/${pollId}?tab=emails`);

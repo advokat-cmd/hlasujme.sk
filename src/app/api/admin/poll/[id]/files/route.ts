@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { listFilesInFolder, createDriveFolder } from "@/lib/gdrive";
+import { listFilesInFolder } from "@/lib/gdrive";
 
 export async function GET(
   request: Request,
@@ -16,35 +16,54 @@ export async function GET(
     const { id: pollId } = await params;
     const poll = await db.poll.findUnique({
       where: { id: pollId },
+      include: { documents: { orderBy: { createdAt: "asc" } } }
     });
 
     if (!poll) {
       return NextResponse.json({ error: "Hlasovanie nebolo nájdené." }, { status: 404 });
     }
 
-    let folderId = poll.driveFolderId;
-    if (!folderId) {
-      // Create folder on the fly for legacy polls
-      const dateString = poll.startAt.toISOString().split("T")[0];
-      const folderName = `Podklady-hlasovanie-${dateString}`;
-      folderId = await createDriveFolder(folderName);
-      if (folderId) {
-        await db.poll.update({
-          where: { id: pollId },
-          data: { driveFolderId: folderId },
-        });
+    interface FileEntry {
+      id: string;
+      name: string;
+      mimeType: string;
+      webViewLink: string;
+      driveWebViewLink: string | null;
+      source: "local" | "drive";
+    }
+
+    // Primary source: documents registered in the database (server storage)
+    const files: FileEntry[] = poll.documents.map(d => ({
+      id: d.id,
+      name: d.name,
+      mimeType: d.mimeType,
+      webViewLink: `/api/document/${d.id}`,
+      driveWebViewLink: d.webViewLink,
+      source: "local"
+    }));
+
+    // Legacy polls: documents uploaded before server storage existed live only
+    // in the poll's Drive folder — merge them in (skip Drive copies of known docs).
+    if (poll.driveFolderId) {
+      const knownDriveIds = new Set(poll.documents.map(d => d.driveFileId).filter(Boolean));
+      const driveFiles = await listFilesInFolder(poll.driveFolderId);
+      for (const f of driveFiles) {
+        if (!knownDriveIds.has(f.id)) {
+          files.push({
+            id: f.id,
+            name: f.name,
+            mimeType: f.mimeType,
+            webViewLink: f.webViewLink,
+            driveWebViewLink: f.webViewLink,
+            source: "drive"
+          });
+        }
       }
     }
 
-    if (!folderId) {
-      // If Google Drive integration is not configured
-      return NextResponse.json({ files: [] });
-    }
-
-    const files = await listFilesInFolder(folderId);
     return NextResponse.json({ files });
   } catch (err) {
     console.error("Error fetching files:", err);
-    return NextResponse.json({ error: "Chyba pri načítaní súborov z Google Drive." }, { status: 500 });
+    return NextResponse.json({ error: "Chyba pri načítaní súborov." }, { status: 500 });
   }
 }
