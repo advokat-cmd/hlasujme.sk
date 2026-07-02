@@ -173,7 +173,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                 return (
                   <div key={q.no} style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>{q.no}.</span>
-                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600 }}>{q.title}</span>
+                    <span style={{ flex: 1, fontSize: 13, fontWeight: 600, overflowWrap: "anywhere", wordBreak: "break-word" }}>{q.title}</span>
                     <span style={{ fontSize: 12, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
                       {q.agree} / {q.need}
                     </span>

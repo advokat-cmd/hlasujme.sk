@@ -157,8 +157,7 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
     for (const r of results) {
       doc.fontSize(11);
       doc.text(bold(`Otázka č. ${r.no} (${r.kind})`)); useRegular();
-      doc.text(t(r.title), { indent: 15 });
-      doc.fontSize(10).fillColor("#5C6473").text(t(r.text), { indent: 15 });
+      doc.text(t(r.text), { indent: 15 });
       doc.fillColor("#1B2330");
       doc.moveDown(0.3);
 

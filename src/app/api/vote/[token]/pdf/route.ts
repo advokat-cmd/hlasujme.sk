@@ -153,8 +153,7 @@ export async function GET(
 
         doc.fontSize(10);
         doc.text(boldClean(`Otázka č. ${q.no}`)); regular();
-        doc.text(clean(q.title), { indent: 10 });
-        doc.fontSize(9).fillColor("#5C6473").text(clean(q.text), { indent: 10 });
+        doc.text(clean(q.text), { indent: 10 });
         doc.moveDown(0.2);
         doc.fontSize(10).fillColor(choiceColor).text(clean(`Odpoveď: ${choiceText}`), { indent: 10 });
         doc.fillColor("#1B2330");

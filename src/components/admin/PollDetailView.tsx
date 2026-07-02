@@ -683,12 +683,9 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                       </div>
 
                       <div>
-                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 6px", lineHeight: 1.3 }}>
-                          {q.title}
-                        </h3>
-                        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5 }}>
+                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 6px", lineHeight: 1.3, overflowWrap: "anywhere", wordBreak: "break-word" }}>
                           {q.text}
-                        </p>
+                        </h3>
                         {q.attachments && q.attachments.length > 0 && (
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {q.attachments.map((url, uIdx) => {
@@ -752,12 +749,9 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                             <Ic name="scale" size={13} /> {getMajorityLabel(q.majorityType)}
                           </span>
                         </div>
-                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>
-                          {q.title}
-                        </h3>
-                        <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 640 }}>
+                        <h3 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "0 0 6px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                           {q.text}
-                        </p>
+                        </h3>
                         {q.attachments && q.attachments.length > 0 && (
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {q.attachments.map((url, uIdx) => {
@@ -1737,7 +1731,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           pollTitle={poll.title}
           questions={questions.map((q) => ({
             no: q.no,
-            title: q.title,
+            title: q.text,
             agree: q.tally.agree,
             need: q.tally.need,
             status: q.tally.status,
