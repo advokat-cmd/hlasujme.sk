@@ -492,7 +492,7 @@ function VIntro({ poll, unit, building, voterName, inProgress, onStart }: VIntro
                 {q.no}
               </span>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>{q.title}</div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, overflowWrap: "anywhere", wordBreak: "break-word" }}>{q.title}</div>
 
               </div>
             </div>
@@ -624,10 +624,10 @@ function VVote({
         <Pill tone="neutral" size="sm">
           {q.kind}
         </Pill>
-        <h2 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "12px 0 10px", lineHeight: 1.3 }}>
+        <h2 style={{ fontFamily: "var(--serif)", fontSize: 18, fontWeight: 600, margin: "12px 0 10px", lineHeight: 1.3, overflowWrap: "anywhere", wordBreak: "break-word" }}>
           {q.title}
         </h2>
-        <p style={{ fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.55, margin: "0 0 16px" }}>
+        <p style={{ fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.55, margin: "0 0 16px", overflowWrap: "anywhere", wordBreak: "break-word" }}>
           {q.text}
         </p>
 
@@ -750,10 +750,10 @@ function VRecap({
                 }}
               >
                 <div style={{ display: "flex", gap: 9, marginBottom: 9 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)", flexShrink: 0 }}>
                     {q.no}.
                   </span>
-                  <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.3, minWidth: 0, overflowWrap: "anywhere", wordBreak: "break-word" }}>
                     {q.title}
                   </span>
                 </div>
@@ -922,10 +922,10 @@ function VDone({
                   border: "1px solid var(--v-line)",
                 }}
               >
-                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)", flexShrink: 0 }}>
                   {q.no}.
                 </span>
-                <span style={{ flex: 1, fontSize: 12.5, fontWeight: 600, lineHeight: 1.25, marginRight: 8, textAlign: "left" }}>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, fontWeight: 600, lineHeight: 1.25, marginRight: 8, textAlign: "left", overflowWrap: "anywhere", wordBreak: "break-word" }}>
                   {q.title}
                 </span>
                 <span
