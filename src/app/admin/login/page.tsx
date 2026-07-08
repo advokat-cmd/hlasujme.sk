@@ -103,11 +103,6 @@ export default function AdminLoginPage() {
                   setPassword(e.target.value);
                   setError("");
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    submit(e);
-                  }
-                }}
                 placeholder="••••••••"
                 required
               />
