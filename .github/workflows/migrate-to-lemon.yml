@@ -34,6 +34,7 @@ jobs:
             OLD_PG_URL="$(node -e 'const u=new URL(process.env.OLD_DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
             TARGET_DATABASE_URL="$(node -e 'const u=new URL(process.env.OLD_DATABASE_URL);u.pathname="/lemon";u.searchParams.set("schema","hlasujme");process.stdout.write(u.toString())')"
             TARGET_PG_URL="$(TARGET_DATABASE_URL="$TARGET_DATABASE_URL" node -e 'const u=new URL(process.env.TARGET_DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+            TARGET_ROLE="$(node -e 'process.stdout.write(new URL(process.env.OLD_DATABASE_URL).username)')"
             export TARGET_DATABASE_URL
 
             node - <<'NODE'
@@ -46,6 +47,10 @@ jobs:
               throw new Error("Refusing migration: unexpected target database boundary");
             }
             NODE
+            if [ -z "$TARGET_ROLE" ]; then echo "Refusing migration: empty database role"; exit 1; fi
+            case "$TARGET_ROLE" in
+              (*[!A-Za-z0-9_]*) echo "Refusing migration: unsafe database role name"; exit 1 ;;
+            esac
 
             TARGET_TABLES="$(psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='hlasujme'")"
             if [ "$TARGET_TABLES" != "0" ]; then
@@ -76,7 +81,7 @@ jobs:
             }
             trap cleanup_failed_migration ERR
 
-            psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA "hlasujme"'
+            runuser -u postgres -- psql -d lemon -v ON_ERROR_STOP=1 -c "CREATE SCHEMA \"hlasujme\" AUTHORIZATION \"$TARGET_ROLE\""
             CREATED_TARGET=1
             DATABASE_URL="$TARGET_DATABASE_URL" npx prisma migrate deploy
             psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 --single-transaction --file="$MAPPED_SQL"
