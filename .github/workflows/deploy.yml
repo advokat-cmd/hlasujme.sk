@@ -1,6 +1,9 @@
 name: Deploy to Production
 
-on: workflow_dispatch
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: hlasujme-production
@@ -57,4 +60,4 @@ jobs:
             npm run build
             systemctl restart hlasovanie
             systemctl is-active --quiet hlasovanie
-            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/admin/login >/dev/null
+            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3001/admin/login >/dev/null
