@@ -7,7 +7,8 @@ Bring the voting application to a state suitable for legally significant apartme
 ## Production environment
 
 - The application is deployed on Hetzner, not Vercel or another serverless platform.
-- PostgreSQL is the authoritative shared state for voting, authorization, sessions, rate limiting, audit records, and closing coordination.
+- Hlasujme shares the PostgreSQL database named `lemon` with the Lemon application. Hlasujme owns only the dedicated PostgreSQL schema `hlasujme`; Lemon data outside that schema is out of scope and must never be read, migrated, truncated, reset, or otherwise changed by this project.
+- PostgreSQL schema `hlasujme` is the authoritative shared state for voting, authorization, sessions, rate limiting, audit records, and closing coordination.
 - Supporting documents and sealed PDFs may use persistent local server storage. Google Drive remains a best-effort backup, never the authorization boundary or primary source of truth.
 - The deployment may run more than one Node.js worker, so correctness cannot depend on process-local memory.
 - `AGENTS.md` must record these facts for future AI-assisted work.
@@ -22,7 +23,7 @@ Poll creation will validate finite dates, `startAt < endAt`, non-empty trimmed c
 
 ### Atomic voting and closing
 
-Closing will acquire a poll-scoped PostgreSQL transaction advisory lock, atomically transition the poll from `active` to a non-votable closing state, and calculate the final snapshot from the same protected database state. Vote writes will acquire the same poll lock and recheck the poll window inside their transaction. A vote that acquires the lock first is included; a close that acquires it first rejects the later vote. There will be no state in which a committed vote is absent from the sealed snapshot.
+Closing will acquire a poll-scoped PostgreSQL transaction advisory lock in a Hlasujme-specific lock namespace, atomically transition the poll from `active` to a non-votable closing state, and calculate the final snapshot from the same protected database state. Vote writes will acquire the same poll lock and recheck the poll window inside their transaction. A vote that acquires the lock first is included; a close that acquires it first rejects the later vote. There will be no state in which a committed vote is absent from the sealed snapshot, and Hlasujme advisory locks will not collide with locks used by Lemon.
 
 The schema will add a `closing` poll status. If PDF or local persistence fails after the status transition, the operation will restore `active` only when the original end time has not passed; otherwise it will remain safely non-votable and expose a retry path. Database finalization of the closed state and sealed metadata will be atomic.
 
@@ -60,7 +61,7 @@ Audit ordering will use a monotonic database identity/order rather than `created
 
 ### Database migrations and deployment
 
-Prisma migrations will introduce session, rate-limit, closing-state, result-hash, and deterministic audit-order fields without deleting existing production data. Migration SQL will be committed and suitable for `prisma migrate deploy` on Hetzner. `prisma.config.ts` will replace the deprecated `package.json#prisma` configuration.
+Prisma migrations will introduce session, rate-limit, closing-state, result-hash, and deterministic audit-order fields without deleting existing production data. Every migration will explicitly target or run with `search_path=hlasujme`; it may create or alter objects only inside the `hlasujme` schema of the shared `lemon` database. Migration review will reject unqualified destructive SQL and any reference to Lemon-owned schemas or tables. Migration SQL will be committed and suitable for `prisma migrate deploy` on Hetzner. `prisma.config.ts` will replace the deprecated `package.json#prisma` configuration.
 
 The storage location will be configurable with an absolute Hetzner path. Startup validation will reject production configurations with weak session secrets, insecure base URLs, missing writable storage, or an unavailable database. No environment values or credentials will be committed.
 
@@ -85,7 +86,7 @@ Production changes follow red-green-refactor TDD. Tests will cover:
 - poll date/majority validation and single-active-poll enforcement;
 - migration validation, TypeScript, ESLint, production build, and a local browser smoke test.
 
-Database integration tests will use a dedicated test schema or database and must never seed, clear, or mutate production data. Where a local test database is unavailable, pure unit suites must still run and the missing integration environment must be reported explicitly rather than treated as a pass.
+Database integration tests will use a disposable database or a uniquely named disposable PostgreSQL schema, never the shared `lemon` database's Lemon-owned schemas and never the production `hlasujme` schema. Test setup will assert the target database/schema before any seed, truncate, migration reset, or cleanup operation. Where a local test database is unavailable, pure unit suites must still run and the missing integration environment must be reported explicitly rather than treated as a pass.
 
 ## Completion criteria
 
@@ -96,4 +97,4 @@ Database integration tests will use a dedicated test schema or database and must
 - `npm audit --omit=dev` has no fixable high or critical vulnerability. Moderate transitive findings without a compatible upstream fix are documented.
 - Browser smoke tests confirm login rendering, authorization failures, invalid-token handling, and key security headers.
 - `AGENTS.md` states that production runs on Hetzner with PostgreSQL and persistent storage.
-
+- `AGENTS.md` states that Hlasujme shares database `lemon` but owns only schema `hlasujme`, and forbids AI-assisted commands from mutating Lemon-owned schemas.
