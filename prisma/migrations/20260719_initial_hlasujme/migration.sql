@@ -1,6 +1,3 @@
--- CreateSchema
-CREATE SCHEMA IF NOT EXISTS "hlasujme";
-
 SET search_path TO "hlasujme";
 
 DO $$ BEGIN
