@@ -83,7 +83,8 @@ jobs:
 
             runuser -u postgres -- psql -d lemon -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS \"hlasujme\" AUTHORIZATION \"$TARGET_ROLE\"; ALTER SCHEMA \"hlasujme\" OWNER TO \"$TARGET_ROLE\""
             CREATED_TARGET=1
-            DATABASE_URL="$TARGET_DATABASE_URL" npx prisma migrate deploy
+            psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 --file=prisma/migrations/20260719_initial_hlasujme/migration.sql
+            DATABASE_URL="$TARGET_DATABASE_URL" npx prisma migrate resolve --applied 20260719_initial_hlasujme
             psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 --single-transaction --file="$MAPPED_SQL"
 
             for table in Admin AuditLog Building CoownerSubvote EmailTemplate Owner Poll PollDocument ProtocolEmailLog Question QuestionTemplate SealedResult Unit Vote VoteToken; do
