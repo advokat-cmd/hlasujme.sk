@@ -17,7 +17,7 @@ export async function createAuditLogEntryWithTx(
   actor: string,
   payload: AuditPayload
 ) {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${HLASUJME_LOCK_NAMESPACE}, ${AUDIT_CHAIN_LOCK_KEY})`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${HLASUJME_LOCK_NAMESPACE}::integer, ${AUDIT_CHAIN_LOCK_KEY}::integer)`;
   const latestEntry = await tx.auditLog.findFirst({ orderBy: { sequence: "desc" } });
   const prevHash = latestEntry
     ? latestEntry.entryHash

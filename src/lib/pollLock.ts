@@ -9,5 +9,5 @@ function pollLockKey(pollId: string): number {
 
 export async function acquirePollLock(tx: Prisma.TransactionClient, pollId: string): Promise<void> {
   const key = pollLockKey(pollId);
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${HLASUJME_LOCK_NAMESPACE}, ${key})`;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${HLASUJME_LOCK_NAMESPACE}::integer, ${key}::integer)`;
 }
