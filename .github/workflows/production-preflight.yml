@@ -33,3 +33,7 @@ jobs:
             LEMON_PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.pathname="/lemon";u.searchParams.delete("schema");process.stdout.write(u.toString())')"
             psql "$PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT 'connected=true'; SELECT 'lemon_exists=' || EXISTS(SELECT 1 FROM pg_database WHERE datname='lemon'); SELECT 'configured_tables=' || count(*) FROM information_schema.tables WHERE table_schema='$DB_SCHEMA'; SELECT 'configured_table_names=' || string_agg(table_name, ',' ORDER BY table_name) FROM information_schema.tables WHERE table_schema='$DB_SCHEMA';"
             psql "$LEMON_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT 'lemon_connected=true'; SELECT 'hlasujme_schema_exists=' || EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='hlasujme'); SELECT 'hlasujme_tables=' || count(*) FROM information_schema.tables WHERE table_schema='hlasujme'; SELECT 'hlasujme_table_names=' || coalesce(string_agg(table_name, ',' ORDER BY table_name), '') FROM information_schema.tables WHERE table_schema='hlasujme';"
+            systemctl show hlasovanie --property=ActiveState,SubState,ExecMainStatus,ExecMainCode --no-pager
+            systemctl cat hlasovanie --no-pager
+            ss -ltnp
+            journalctl -u hlasovanie -n 60 --no-pager
