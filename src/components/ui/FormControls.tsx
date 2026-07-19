@@ -26,7 +26,7 @@ export const FormRow: React.FC<FormRowProps> = ({ label, children, hint }) => (
   </div>
 );
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {}
+type InputProps = React.InputHTMLAttributes<HTMLInputElement>;
 
 export const Input: React.FC<InputProps> = ({ style, ...props }) => (
   <input {...props} style={{ ...inputStyle, ...style }} />

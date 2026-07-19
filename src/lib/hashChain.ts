@@ -1,13 +1,35 @@
 import { db } from "./db";
 import crypto from "crypto";
+import type { Prisma } from "@prisma/client";
 
 export interface AuditPayload {
   message: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 // Arbitrary application-wide lock key for serializing audit chain appends
-const AUDIT_CHAIN_LOCK_KEY = 874219031;
+const HLASUJME_LOCK_NAMESPACE = 121342447;
+const AUDIT_CHAIN_LOCK_KEY = 1;
+
+export async function createAuditLogEntryWithTx(
+  tx: Prisma.TransactionClient,
+  action: string,
+  actor: string,
+  payload: AuditPayload
+) {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(${HLASUJME_LOCK_NAMESPACE}, ${AUDIT_CHAIN_LOCK_KEY})`;
+  const latestEntry = await tx.auditLog.findFirst({ orderBy: { sequence: "desc" } });
+  const prevHash = latestEntry
+    ? latestEntry.entryHash
+    : "0000000000000000000000000000000000000000000000000000000000000000";
+  const createdAt = new Date();
+  const payloadStr = JSON.stringify(payload);
+  const hashInput = `${prevHash}${action}${actor}${payloadStr}${createdAt.toISOString()}`;
+  const entryHash = crypto.createHash("sha256").update(hashInput).digest("hex");
+  return tx.auditLog.create({
+    data: { action, actor, payload: payloadStr, prevHash, entryHash, createdAt },
+  });
+}
 
 export async function createAuditLogEntry(
   action: string,
@@ -17,40 +39,14 @@ export async function createAuditLogEntry(
   // Serialize chain appends with a Postgres advisory lock — two concurrent
   // writers would otherwise read the same "latest" entry and fork the chain.
   return db.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(${AUDIT_CHAIN_LOCK_KEY})`;
-
-    const latestEntry = await tx.auditLog.findFirst({
-      orderBy: { createdAt: "desc" }
-    });
-
-    const prevHash = latestEntry
-      ? latestEntry.entryHash
-      : "0000000000000000000000000000000000000000000000000000000000000000";
-
-    const createdAt = new Date();
-    const payloadStr = JSON.stringify(payload);
-
-    // Compute entryHash = SHA-256(prevHash + action + actor + payloadStr + createdAt.toISOString())
-    const hashInput = `${prevHash}${action}${actor}${payloadStr}${createdAt.toISOString()}`;
-    const entryHash = crypto.createHash("sha256").update(hashInput).digest("hex");
-
-    return tx.auditLog.create({
-      data: {
-        action,
-        actor,
-        payload: payloadStr,
-        prevHash,
-        entryHash,
-        createdAt
-      }
-    });
+    return createAuditLogEntryWithTx(tx, action, actor, payload);
   });
 }
 
 // Function to verify the integrity of the audit chain
 export async function verifyAuditChain(): Promise<boolean> {
   const logs = await db.auditLog.findMany({
-    orderBy: { createdAt: "asc" }
+    orderBy: { sequence: "asc" }
   });
 
   if (logs.length === 0) return true;

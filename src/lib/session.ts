@@ -1,80 +1,21 @@
+import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
+import { db } from "./db";
 
 const SESSION_COOKIE_NAME = "hlasovanie_session";
+const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
-/**
- * Returns the HMAC secret for session cookies and signed download links.
- * In production a missing/weak SESSION_SECRET is a fatal misconfiguration —
- * a known fallback secret would let anyone forge an admin session.
- */
 export function getSessionSecret(): string {
   const secret = process.env.SESSION_SECRET;
-  if (secret && secret.length >= 16) {
-    return secret;
-  }
+  if (secret && secret.length >= 32) return secret;
   if (process.env.NODE_ENV === "production") {
-    throw new Error("SESSION_SECRET musí byť nastavený (min. 16 znakov) — bez neho sa dajú sfalšovať admin session cookies.");
+    throw new Error("SESSION_SECRET musí mať v produkcii aspoň 32 znakov.");
   }
-  console.warn("SESSION_SECRET nie je nastavený — používa sa nechránený DEV fallback.");
-  return "dev-only-insecure-secret";
+  return "dev-only-insecure-secret-change-me";
 }
 
-// Helper to sign/verify tokens using standard Web Crypto API (HMAC SHA-256)
-async function getCryptoKey(): Promise<CryptoKey> {
-  const enc = new TextEncoder();
-  const keyData = enc.encode(getSessionSecret());
-  return crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: { name: "SHA-256" } },
-    false,
-    ["sign", "verify"]
-  );
-}
-
-export async function encryptSession(payload: any): Promise<string> {
-  const enc = new TextEncoder();
-  const payloadStr = JSON.stringify(payload);
-  const payloadBase64 = Buffer.from(payloadStr).toString("base64url");
-  
-  const key = await getCryptoKey();
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    enc.encode(payloadBase64)
-  );
-  
-  const signatureBase64 = Buffer.from(signature).toString("base64url");
-  return `${payloadBase64}.${signatureBase64}`;
-}
-
-export async function decryptSession(token: string): Promise<any | null> {
-  if (!token) return null;
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-
-  const [payloadBase64, signatureBase64] = parts;
-  
-  try {
-    const key = await getCryptoKey();
-    const enc = new TextEncoder();
-    const data = enc.encode(payloadBase64);
-    const signature = Buffer.from(signatureBase64, "base64url");
-
-    const isValid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signature,
-      data
-    );
-
-    if (!isValid) return null;
-
-    const decodedStr = Buffer.from(payloadBase64, "base64url").toString("utf-8");
-    return JSON.parse(decodedStr);
-  } catch (err) {
-    return null;
-  }
+function hashSessionToken(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 export interface AdminSession {
@@ -87,25 +28,62 @@ export interface AdminSession {
 
 export async function getAdminSession(): Promise<AdminSession | null> {
   const cookieStore = await cookies();
-  const cookieVal = cookieStore.get(SESSION_COOKIE_NAME)?.value;
-  if (!cookieVal) return null;
-  return decryptSession(cookieVal);
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (!token) return null;
+  const now = new Date();
+  const session = await db.adminSession.findUnique({
+    where: { tokenHash: hashSessionToken(token) },
+    include: { admin: true },
+  });
+  if (!session || session.revokedAt || session.expiresAt <= now) {
+    if (session && !session.revokedAt) {
+      await db.adminSession.update({ where: { id: session.id }, data: { revokedAt: now } });
+    }
+    return null;
+  }
+  return {
+    adminId: session.admin.id,
+    email: session.admin.email,
+    name: session.admin.name,
+    unitId: session.admin.unitId,
+    role: session.admin.role,
+  };
 }
 
 export async function setAdminSession(session: AdminSession): Promise<void> {
-  const token = await encryptSession(session);
+  const token = randomBytes(32).toString("base64url");
+  await db.adminSession.create({
+    data: {
+      tokenHash: hashSessionToken(token),
+      adminId: session.adminId,
+      expiresAt: new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000),
+    },
+  });
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {
     httpOnly: true,
-    // Secure by default — only plain-HTTP local dev opts out
     secure: process.env.NODE_ENV !== "development",
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 7 // 7 days
+    maxAge: SESSION_MAX_AGE_SECONDS,
+  });
+}
+
+export async function revokeAdminSessions(adminId: string): Promise<void> {
+  await db.adminSession.updateMany({
+    where: { adminId, revokedAt: null },
+    data: { revokedAt: new Date() },
   });
 }
 
 export async function clearAdminSession(): Promise<void> {
   const cookieStore = await cookies();
+  const token = cookieStore.get(SESSION_COOKIE_NAME)?.value;
+  if (token) {
+    await db.adminSession.updateMany({
+      where: { tokenHash: hashSessionToken(token), revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
   cookieStore.delete(SESSION_COOKIE_NAME);
 }

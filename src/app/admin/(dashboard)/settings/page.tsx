@@ -20,7 +20,7 @@ export default async function AdminSettingsPage() {
   });
 
   // Fetch email templates
-  let emailTemplates = await db.emailTemplate.findMany();
+  const emailTemplates = await db.emailTemplate.findMany();
   
   if (!emailTemplates.some(t => t.key === "invitation")) {
     const defaultInvitation = await db.emailTemplate.create({

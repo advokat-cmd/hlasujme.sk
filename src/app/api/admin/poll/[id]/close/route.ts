@@ -4,10 +4,12 @@ import { db } from "@/lib/db";
 import { PollStatus } from "@prisma/client";
 import { generateSealedProtocol } from "@/lib/pdf";
 import { createAuditLogEntry } from "@/lib/hashChain";
-import crypto from "crypto";
 import fs from "fs";
 import path from "path";
 import { uploadFileToDrive } from "@/lib/gdrive";
+import { acquirePollLock } from "@/lib/pollLock";
+import { canonicalJson, sha256Hex } from "@/lib/seal";
+import { resolveStoragePath, storageRelativePath } from "@/lib/storage";
 
 export async function POST(
   request: Request,
@@ -35,13 +37,26 @@ export async function POST(
       return NextResponse.json({ error: "Hlasovanie nebolo nájdené." }, { status: 404 });
     }
 
-    if (poll.status !== PollStatus.active) {
+    if (poll.sealedResult) {
+      return NextResponse.json({ success: true, sha256: poll.sealedResult.sha256, alreadySealed: true });
+    }
+
+    if (poll.status !== PollStatus.active && poll.status !== PollStatus.closing) {
       return NextResponse.json({ error: "Hlasovanie už bolo uzavreté alebo je v stave draft." }, { status: 400 });
     }
 
-    if (poll.sealedResult) {
-      return NextResponse.json({ error: "Zápisnica pre toto hlasovanie už existuje." }, { status: 400 });
-    }
+    // Stop new votes under the same lock used by vote transactions. A retry may
+    // continue a previous interrupted close from the `closing` state.
+    await db.$transaction(async tx => {
+      await acquirePollLock(tx, pollId);
+      const current = await tx.poll.findUnique({ where: { id: pollId }, include: { sealedResult: true } });
+      if (!current || current.sealedResult) return;
+      if (current.status === PollStatus.active) {
+        await tx.poll.update({ where: { id: pollId }, data: { status: PollStatus.closing } });
+      } else if (current.status !== PollStatus.closing) {
+        throw new Error("POLL_NOT_CLOSABLE");
+      }
+    });
 
     // 3. Generate the sealed PDF + final results FIRST — if this fails, the
     // poll stays active and the admin can retry safely.
@@ -53,14 +68,22 @@ export async function POST(
       finalResults = protocol.results;
     } catch (pdfErr) {
       console.error("Sealed PDF generation failed:", pdfErr);
+      if (poll.endAt > new Date()) {
+        await db.$transaction(async tx => {
+          await acquirePollLock(tx, pollId);
+          await tx.poll.updateMany({ where: { id: pollId, status: PollStatus.closing }, data: { status: PollStatus.active } });
+        });
+      }
       return NextResponse.json(
-        { error: "Generovanie PDF zápisnice zlyhalo — hlasovanie NEBOLO uzavreté. Skúste to znova." },
+        { error: "Generovanie PDF zápisnice zlyhalo. Uzatvorenie môžete bezpečne zopakovať." },
         { status: 500 }
       );
     }
 
     // 4. Calculate cryptographic SHA-256 seal
-    const sha256 = crypto.createHash("sha256").update(pdfBuffer).digest("hex");
+    const sha256 = sha256Hex(pdfBuffer);
+    const resultJson = canonicalJson(finalResults);
+    const resultSha256 = sha256Hex(resultJson);
 
     // 5. Save PDF to private server storage (ASCII filename — used in
     // Content-Disposition headers; pollId prefix prevents same-day collisions)
@@ -71,9 +94,9 @@ export async function POST(
     const formattedDate = `${year}-${month}-${day}`;
     const fileName = `zapisnica-${formattedDate}-${pollId.slice(0, 8)}.pdf`;
 
-    const storageDir = path.join(process.cwd(), "storage", "sealed");
-    const relativePdfPath = `/storage/sealed/${fileName}`;
-    const absolutePdfPath = path.join(storageDir, fileName);
+    const absolutePdfPath = resolveStoragePath(`sealed/${fileName}`);
+    const storageDir = path.dirname(absolutePdfPath);
+    const relativePdfPath = storageRelativePath(absolutePdfPath);
 
     try {
       if (!fs.existsSync(storageDir)) {
@@ -82,8 +105,14 @@ export async function POST(
       fs.writeFileSync(absolutePdfPath, pdfBuffer);
     } catch (fsErr) {
       console.error("Failed to persist sealed PDF to storage:", fsErr);
+      if (poll.endAt > new Date()) {
+        await db.$transaction(async tx => {
+          await acquirePollLock(tx, pollId);
+          await tx.poll.updateMany({ where: { id: pollId, status: PollStatus.closing }, data: { status: PollStatus.active } });
+        });
+      }
       return NextResponse.json(
-        { error: "Uloženie PDF zápisnice na server zlyhalo — hlasovanie NEBOLO uzavreté." },
+        { error: "Uloženie PDF zápisnice zlyhalo. Uzatvorenie môžete bezpečne zopakovať." },
         { status: 500 }
       );
     }
@@ -110,16 +139,18 @@ export async function POST(
       }
     }
 
-    // 7. Close the poll and seal the result atomically
-    await db.$transaction([
-      db.poll.update({
-        where: { id: pollId },
-        data: { status: PollStatus.closed }
-      }),
-      db.sealedResult.create({
+    // 7. Close the poll and seal the exact snapshot under the poll lock.
+    const sealedResult = await db.$transaction(async tx => {
+      await acquirePollLock(tx, pollId);
+      const existing = await tx.sealedResult.findUnique({ where: { pollId } });
+      if (existing) return existing;
+      const current = await tx.poll.findUnique({ where: { id: pollId } });
+      if (!current || current.status !== PollStatus.closing) throw new Error("POLL_NOT_CLOSABLE");
+      const sealed = await tx.sealedResult.create({
         data: {
           pollId,
-          resultJson: JSON.stringify(finalResults),
+          resultJson,
+          resultSha256,
           sha256,
           pdfPath: relativePdfPath,
           sealedAt: new Date(),
@@ -127,8 +158,10 @@ export async function POST(
           driveWebViewLink: driveFile?.webViewLink ?? null,
           driveUploadedAt: driveFile ? new Date() : null
         }
-      })
-    ]);
+      });
+      await tx.poll.update({ where: { id: pollId }, data: { status: PollStatus.closed } });
+      return sealed;
+    });
 
     // 8. Add Audit Trail entry
     await createAuditLogEntry(
@@ -149,7 +182,8 @@ export async function POST(
     // protocol tab once the Drive backup is confirmed.
     return NextResponse.json({
       success: true,
-      sha256,
+      sha256: sealedResult.sha256,
+      resultSha256: sealedResult.resultSha256,
       driveUploaded: !!driveFile,
       driveConfigured,
       driveError: driveErrorMessage

@@ -10,6 +10,7 @@ import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
 import { EmailTemplateEditor, DEFAULT_EMAIL_TEMPLATES } from "./EmailTemplateEditor";
+import { sanitizeEmailPreview } from "@/lib/security/html";
 
 interface Template {
   id: string;
@@ -134,7 +135,7 @@ const convertPlainTextToHtml = (key: string, text: string): string => {
     
     // Check for credentials box
     if (p.includes("Prihlasovacia stránka:") || p.includes("Prihlasovací e-mail:") || p.includes("Prihlasovacie heslo:")) {
-      let lines = p.split("\n").map(l => l.trim()).filter(Boolean);
+      const lines = p.split("\n").map(l => l.trim()).filter(Boolean);
       let boxHtml = `<div class="box">\n`;
       lines.forEach(line => {
         if (line.startsWith("Prihlasovacia stránka:")) {
@@ -161,7 +162,7 @@ const convertPlainTextToHtml = (key: string, text: string): string => {
     
     // Check for other info box (containing {pollTitle})
     if (p.includes("{pollTitle}")) {
-      let lines = p.split("\n").map(l => l.trim()).filter(Boolean);
+      const lines = p.split("\n").map(l => l.trim()).filter(Boolean);
       let boxHtml = `<div class="box">\n`;
       lines.forEach((line, lineIdx) => {
         if (lineIdx === 0) {
@@ -791,7 +792,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                           setEmailSubject(def.subject);
                           const wysiwygEditor = document.getElementById("wysiwyg-email-editor");
                           if (wysiwygEditor) {
-                            wysiwygEditor.innerHTML = def.body;
+                            wysiwygEditor.innerHTML = sanitizeEmailPreview(def.body);
                           }
                         }
                       }
@@ -968,7 +969,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
               >
                 <div
                   dangerouslySetInnerHTML={{
-                    __html: generateEmailPreviewHtml(editingEmail.key, emailSubject, emailBody).bodyHtml
+                    __html: sanitizeEmailPreview(generateEmailPreviewHtml(editingEmail.key, emailSubject, emailBody).bodyHtml)
                   }}
                   style={{ width: "100%", maxWidth: 600 }}
                 />

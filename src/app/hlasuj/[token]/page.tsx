@@ -5,7 +5,6 @@ import { VoterAppClient } from "./VoterAppClient";
 import { Card } from "@/components/ui/Card";
 import { Ic } from "@/components/ui/Icons";
 import { VoteAnswer } from "@prisma/client";
-import { listFilesInFolder } from "@/lib/gdrive";
 
 interface PageProps {
   params: Promise<{ token: string }>;
@@ -171,17 +170,13 @@ export default async function VoterPage({ params }: PageProps) {
     orderBy: { createdAt: "asc" }
   });
 
-  let driveFiles: Array<{ id: string; name: string; webViewLink: string; mimeType: string }> =
+  const driveFiles: Array<{ id: string; name: string; webViewLink: string; mimeType: string }> =
     documents.map(d => ({
       id: d.id,
       name: d.name,
-      webViewLink: `/api/document/${d.id}`,
+      webViewLink: `/api/document/${d.id}?token=${encodeURIComponent(token)}`,
       mimeType: d.mimeType
     }));
-
-  if (driveFiles.length === 0 && poll.driveFolderId) {
-    driveFiles = await listFilesInFolder(poll.driveFolderId);
-  }
 
   const serializedPoll = {
     id: poll.id,

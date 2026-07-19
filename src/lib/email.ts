@@ -102,7 +102,7 @@ export async function getConfirmationEmail(params: {
   dateFormatted: string;
   answersSummary: { qNo: number; qTitle: string; answerText: string }[];
 }) {
-  let template = await db.emailTemplate.findUnique({
+  const template = await db.emailTemplate.findUnique({
     where: { key: "confirmation" }
   });
 
@@ -161,7 +161,7 @@ export async function getReminderEmail(params: {
   endFormatted: string;
   magicLink: string;
 }) {
-  let template = await db.emailTemplate.findUnique({
+  const template = await db.emailTemplate.findUnique({
     where: { key: "reminder" }
   });
 
@@ -210,7 +210,7 @@ export async function getInvitationEmail(params: {
   endFormatted: string;
   magicLink: string;
 }) {
-  let template = await db.emailTemplate.findUnique({
+  const template = await db.emailTemplate.findUnique({
     where: { key: "invitation" }
   });
 
@@ -328,7 +328,7 @@ export async function getCredentialsEmail(params: {
   loginEmail: string;
   rawPassword: string;
 }) {
-  let template = await db.emailTemplate.findUnique({
+  const template = await db.emailTemplate.findUnique({
     where: { key: "credentials" }
   });
 

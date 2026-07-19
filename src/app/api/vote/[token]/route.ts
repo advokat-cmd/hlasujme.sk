@@ -1,33 +1,33 @@
 import { NextResponse } from "next/server";
-import { validateVoteToken } from "@/lib/tokens";
+import { isPollOpen, validateVoteToken } from "@/lib/tokens";
 import { db } from "@/lib/db";
-import { VoteAnswer, Prisma } from "@prisma/client";
-import { createAuditLogEntry } from "@/lib/hashChain";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { VoteAnswer } from "@prisma/client";
+import { createAuditLogEntryWithTx } from "@/lib/hashChain";
+import { consumeRateLimit, privateRateLimitKey } from "@/lib/security/rateLimit";
+import { getClientIp } from "@/lib/security/clientIp";
 import { sendEmail, getConfirmationEmail } from "@/lib/email";
+import { parseVoteAnswers } from "@/lib/security/input";
+import { acquirePollLock } from "@/lib/pollLock";
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ token: string }> }
 ) {
   try {
-    const sourceIp = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown";
+    const sourceIp = getClientIp(request.headers);
 
     // Limit vote submissions to 20 per minute per IP
-    if (!checkRateLimit(sourceIp, 20, 60000)) {
+    const rateLimit = await consumeRateLimit({ action: "vote", key: privateRateLimitKey(sourceIp), limit: 20, windowMs: 60000 });
+    if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: "Príliš veľa pokusov o hlasovanie. Skúste to znova o minútu." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
       );
     }
 
     const { token } = await params;
-    const body = await request.json();
-    const { answers, finalize = false } = body as { answers: Record<string, VoteAnswer>; finalize?: boolean };
-
-    if (!answers || typeof answers !== "object") {
-      return NextResponse.json({ error: "Chybné údaje odpovedí." }, { status: 400 });
-    }
+    const body = await request.json() as { answers?: unknown; finalize?: unknown };
+    const finalize = body.finalize === true;
 
     // 1. Validate magic link token
     const tokenInfo = await validateVoteToken(token);
@@ -36,10 +36,16 @@ export async function POST(
     }
 
     const { tokenRecord, poll, unit, owner } = tokenInfo;
+    let answers: Record<number, VoteAnswer>;
+    try {
+      answers = parseVoteAnswers(body.answers, new Set(poll.questions.map(question => question.no))) as Record<number, VoteAnswer>;
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Chybné údaje odpovedí." }, { status: 400 });
+    }
 
     if (finalize) {
       // Check that all questions in the poll are answered
-      const unanswered = poll.questions.filter(q => !answers[String(q.no)]);
+      const unanswered = poll.questions.filter(q => !answers[q.no]);
       if (unanswered.length > 0) {
         return NextResponse.json({
           error: `Nezodpovedané otázky: ${unanswered.map(q => q.no).join(", ")}`
@@ -47,12 +53,28 @@ export async function POST(
       }
     }
 
-    // 2. Perform votes insertion inside a database transaction to ensure versioning integrity.
-    // Concurrent submissions with the same token can race on the version unique
-    // constraint (P2002) — retry once so the voter does not get a spurious error.
+    // 2. Serialize vote writes with poll closing and re-check mutable state under the lock.
     const runVoteTransaction = () => db.$transaction(async (tx) => {
+      await acquirePollLock(tx, poll.id);
+      const lockedToken = await tx.voteToken.findUnique({
+        where: { id: tokenRecord.id },
+        include: { poll: true, unit: { include: { owners: true } } },
+      });
+      const lockedNow = new Date();
+      if (
+        !lockedToken ||
+        lockedToken.expiresAt < lockedNow ||
+        !isPollOpen(lockedToken.poll, lockedNow) ||
+        lockedToken.pollId !== poll.id ||
+        lockedToken.unitId !== unit.id ||
+        lockedToken.unit.buildingId !== lockedToken.poll.buildingId ||
+        (lockedToken.ownerId && !lockedToken.unit.owners.some(item => item.id === lockedToken.ownerId))
+      ) {
+        throw new Error("POLL_NOT_OPEN");
+      }
+      const changedQuestions: number[] = [];
       for (const q of poll.questions) {
-        const answer = answers[String(q.no)];
+        const answer = answers[q.no];
         if (!answer) continue;
 
         if (owner) {
@@ -82,6 +104,7 @@ export async function POST(
                 tokenId: tokenRecord.id
               }
             });
+            changedQuestions.push(q.no);
           }
         } else {
           // Unit vote
@@ -108,6 +131,7 @@ export async function POST(
                 tokenId: tokenRecord.id
               }
             });
+            changedQuestions.push(q.no);
           }
         }
       }
@@ -119,39 +143,42 @@ export async function POST(
           data: { usedAt: new Date() }
         });
       }
+      if (changedQuestions.length > 0 || finalize) {
+        const actorName = owner
+          ? `${unit.no}/${owner.name}`
+          : `${unit.no}/${unit.actingPerson || unit.owners.map(item => item.name).join(", ") || "Vlastník"}`;
+        await createAuditLogEntryWithTx(
+          tx,
+          finalize ? "VOTE_CAST" : "VOTE_VERSION_SAVED",
+          `voter:${actorName}`,
+          {
+            message: finalize ? `Hlasovanie odoslané pre jednotku č. ${unit.no}.` : `Priebežná verzia hlasu uložená pre jednotku č. ${unit.no}.`,
+            pollId: poll.id,
+            unitId: unit.id,
+            ownerId: owner?.id ?? null,
+            questions: changedQuestions,
+            finalized: finalize,
+            sourceIp,
+          }
+        );
+      }
     });
 
     try {
       await runVoteTransaction();
     } catch (txErr) {
-      const isVersionConflict =
-        txErr instanceof Prisma.PrismaClientKnownRequestError && txErr.code === "P2002";
-      if (!isVersionConflict) throw txErr;
-      await runVoteTransaction();
+      if (txErr instanceof Error && txErr.message === "POLL_NOT_OPEN") {
+        return NextResponse.json({ error: "Hlasovanie nie je otvorené." }, { status: 409 });
+      }
+      throw txErr;
     }
 
     if (finalize) {
-      // 3. Log to audit chain (outside the transaction, so if transaction commits, log is registered)
-      const actorName = owner ? `${unit.no}/${owner.name}` : `${unit.no}/${unit.actingPerson || (unit.owners.length > 0 ? unit.owners.map(o => o.name).join(", ") : "Vlastník")}`;
-      await createAuditLogEntry(
-        "VOTE_CAST",
-        `voter:${actorName}`,
-        {
-          message: `Hlasovanie odoslané vlastníkom pre byt č. ${unit.no}`,
-          unitNo: unit.no,
-          ownerName: owner?.name || null,
-          coMode: unit.coMode,
-          questions: Object.keys(answers).map(Number),
-          answers,
-          sourceIp
-        }
-      );
-
-      // 4. Send Confirmation Email dynamically from DB template
+      // 3. Send confirmation email after the authoritative vote + audit commit.
       const targetEmail = owner?.email || unit.email;
       if (targetEmail && targetEmail.trim()) {
         const answersSummary = poll.questions.map(q => {
-          const answer = answers[String(q.no)];
+          const answer = answers[q.no];
           return {
             qNo: q.no,
             qTitle: q.title,

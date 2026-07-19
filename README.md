@@ -1,36 +1,26 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hlasujme.sk
 
-## Getting Started
+Aplikácia na elektronické hlasovanie vlastníkov bytov. Produkcia beží na trvalom serveri Hetzner, nie na platforme Vercel.
 
-First, run the development server:
+## Lokálny vývoj
 
 ```bash
+npm install
+npx prisma generate
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Pred odovzdaním zmien spustite `npm run check` a `npm run build`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Produkcia na Hetzneri
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Povinné premenné prostredia:
 
-## Learn More
+- `DATABASE_URL` smeruje do spoločnej PostgreSQL databázy `lemon` a musí obsahovať `?schema=hlasujme`.
+- `SESSION_SECRET` má aspoň 32 náhodných znakov.
+- `STORAGE_ROOT` je absolútna cesta k perzistentnému úložisku mimo repozitára.
+- `TRUST_PROXY=1` nastavte iba vtedy, keď reverzný proxy server prepisuje hlavičky klientskych IP a aplikácia nie je dostupná priamo.
 
-To learn more about Next.js, take a look at the following resources:
+Nasadenie databázových zmien robte iba príkazom `npx prisma migrate deploy`. Pred migráciou vytvorte zálohu databázy `lemon`. Aplikácia smie meniť iba schému `hlasujme`; schémy a tabuľky aplikácie Lemon sú mimo jej rozsahu.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Destruktívny skript `scripts/clear-db.ts` zámerne odmietne produkčnú schému. Spustí sa iba s `ALLOW_DESTRUCTIVE_TEST_DB=1` a URL schémy v tvare `hlasujme_test_*`.

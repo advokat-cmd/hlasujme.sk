@@ -102,6 +102,20 @@ model Admin {
   unit         Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
   ownerId      String?
   owner        Owner?   @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+  sessions     AdminSession[]
+}
+
+model AdminSession {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique
+  adminId    String
+  admin      Admin    @relation(fields: [adminId], references: [id], onDelete: Cascade)
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@index([adminId, expiresAt])
 }
 
 model QuestionTemplate {
@@ -124,6 +138,7 @@ model EmailTemplate {
 enum PollStatus {
   draft
   active
+  closing
   closed
 }
 
@@ -253,6 +268,7 @@ model CoownerSubvote {
 
 model AuditLog {
   id        String   @id @default(uuid())
+  sequence  BigInt   @unique @default(autoincrement())
   action    String
   actor     String
   payload   String   // JSON string
@@ -269,6 +285,7 @@ model SealedResult {
   poll       Poll     @relation(fields: [pollId], references: [id], onDelete: Cascade)
   
   resultJson String   // Serialized result details (tallies, votes etc.)
+  resultSha256 String?
   sha256     String   // Hash of results data
   sealedAt   DateTime @default(now())
   pdfPath    String   // Path to PDF file on server
@@ -277,6 +294,17 @@ model SealedResult {
   driveFileId      String?
   driveWebViewLink String?
   driveUploadedAt  DateTime?
+}
+
+model RateLimitBucket {
+  action      String
+  key         String
+  windowStart DateTime
+  count       Int
+  expiresAt   DateTime
+
+  @@id([action, key, windowStart])
+  @@index([expiresAt])
 }
 
 model ProtocolEmailLog {

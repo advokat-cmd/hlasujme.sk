@@ -15,6 +15,13 @@ export interface GeneratedTokenInfo {
   token: string;
 }
 
+export function isPollOpen(
+  poll: { status: string; startAt: Date; endAt: Date },
+  now = new Date()
+): boolean {
+  return poll.status === PollStatus.active && poll.startAt <= now && poll.endAt >= now;
+}
+
 export async function generateVoteTokens(pollId: string): Promise<GeneratedTokenInfo[]> {
   const poll = await db.poll.findUnique({
     where: { id: pollId },
@@ -120,18 +127,17 @@ export async function validateVoteToken(plainToken: string) {
   const poll = tokenRecord.poll;
 
   // Verify that the token has not expired and the poll is active
-  if (tokenRecord.expiresAt < now || poll.status !== PollStatus.active) {
+  if (tokenRecord.expiresAt < now || !isPollOpen(poll, now)) {
     return null;
   }
-
-  // Verify currently has not ended
-  if (poll.endAt < now) {
+  if (tokenRecord.unit.buildingId !== poll.buildingId) {
     return null;
   }
 
   let owner = null;
   if (tokenRecord.ownerId) {
     owner = tokenRecord.unit.owners.find(o => o.id === tokenRecord.ownerId) || null;
+    if (!owner) return null;
   }
 
   return {

@@ -101,10 +101,10 @@ export async function GET(
       doc.on("error", (err) => reject(err));
 
       // Bundled fonts are cached per-process and preserve Slovak diacritics
-      const { t: clean, useBold, useRegular: regular } = setupPdfFonts(doc);
+      const { t: clean, useBold: setBold, useRegular: regular } = setupPdfFonts(doc);
 
       const boldClean = (txt: string) => {
-        useBold();
+        setBold();
         return clean(txt);
       };
 

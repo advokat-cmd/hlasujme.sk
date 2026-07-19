@@ -8,16 +8,20 @@ import { getSessionSecret } from "./session";
  * HMAC signature that authorizes downloading the sealed protocol PDF of one
  * poll without a login session. Sent to owners inside the protocol email.
  */
-export function signSealedPdfAccess(pollId: string): string {
+export function signSealedPdfAccess(pollId: string, expiresAt: number): string {
   return crypto
     .createHmac("sha256", getSessionSecret())
-    .update(`sealed-pdf:${pollId}`)
+    .update(`sealed-pdf:${pollId}:${expiresAt}`)
     .digest("hex");
 }
 
-export function verifySealedPdfAccess(pollId: string, signature: string | null): boolean {
-  if (!signature) return false;
-  const expected = signSealedPdfAccess(pollId);
+export function verifySealedPdfAccess(pollId: string, signedValue: string | null, now = Date.now()): boolean {
+  if (!signedValue) return false;
+  const separator = signedValue.indexOf(".");
+  const expiresAt = Number(signedValue.slice(0, separator));
+  const signature = signedValue.slice(separator + 1);
+  if (separator < 1 || !Number.isSafeInteger(expiresAt) || expiresAt < now || expiresAt > now + 31 * 24 * 60 * 60 * 1000) return false;
+  const expected = signSealedPdfAccess(pollId, expiresAt);
   const provided = Buffer.from(signature);
   const expectedBuf = Buffer.from(expected);
   if (provided.length !== expectedBuf.length) return false;
@@ -26,7 +30,8 @@ export function verifySealedPdfAccess(pollId: string, signature: string | null):
 
 export function buildProtocolDownloadLink(pollId: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-  return `${baseUrl}/api/sealed/${pollId}/pdf?sig=${signSealedPdfAccess(pollId)}`;
+  const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+  return `${baseUrl}/api/sealed/${pollId}/pdf?sig=${expiresAt}.${signSealedPdfAccess(pollId, expiresAt)}`;
 }
 
 export interface ProtocolEmailSummary {

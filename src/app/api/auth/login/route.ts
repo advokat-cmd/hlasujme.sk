@@ -1,19 +1,21 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { setAdminSession } from "@/lib/session";
-import { checkRateLimit } from "@/lib/rateLimit";
+import { consumeRateLimit, privateRateLimitKey } from "@/lib/security/rateLimit";
+import { getClientIp } from "@/lib/security/clientIp";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
 
 export async function POST(request: Request) {
   try {
-    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "127.0.0.1";
+    const ip = getClientIp(request.headers);
     
     // Limit login attempts to 5 per minute
-    if (!checkRateLimit(ip, 5, 60000)) {
+    const rateLimit = await consumeRateLimit({ action: "login", key: privateRateLimitKey(ip), limit: 5, windowMs: 60000 });
+    if (!rateLimit.allowed) {
       return NextResponse.json(
         { error: "Príliš veľa pokusov o prihlásenie. Skúste to znova o minútu." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(rateLimit.retryAfterSeconds) } }
       );
     }
 

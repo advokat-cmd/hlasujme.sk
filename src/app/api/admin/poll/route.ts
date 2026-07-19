@@ -6,6 +6,7 @@ import { generateVoteTokens } from "@/lib/tokens";
 import { sendEmail, getInvitationEmail } from "@/lib/email";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import { createDriveFolder } from "@/lib/gdrive";
+import { validatePollInput } from "@/lib/security/input";
 
 export async function POST(request: Request) {
   try {
@@ -20,22 +21,27 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Budova nebola nájdená." }, { status: 404 });
     }
 
-    const body = await request.json();
-    const { basics, questions } = body as {
-      basics: { title: string; reason: string; start: string; end: string };
-      questions: Array<{ text: string; majority: string; note?: string }>;
-    };
-
-    if (!basics.title || !basics.reason || !basics.start || !basics.end) {
-      return NextResponse.json({ error: "Základné údaje hlasovania sú povinné." }, { status: 400 });
+    let input: ReturnType<typeof validatePollInput>;
+    try {
+      input = validatePollInput(await request.json());
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Neplatné údaje hlasovania." },
+        { status: 400 }
+      );
     }
+    const { basics, questions } = input;
 
-    if (!questions || questions.length === 0) {
-      return NextResponse.json({ error: "Hlasovanie musí obsahovať aspoň jednu otázku." }, { status: 400 });
+    const conflictingPoll = await db.poll.findFirst({
+      where: { buildingId: building.id, status: { in: [PollStatus.active, PollStatus.closing] } },
+      select: { id: true },
+    });
+    if (conflictingPoll) {
+      return NextResponse.json({ error: "Pre tento dom už prebieha aktívne hlasovanie." }, { status: 409 });
     }
 
     // Create folder on Google Drive
-    const dateString = basics.start ? basics.start.split("T")[0] : new Date().toISOString().split("T")[0];
+    const dateString = basics.startAt.toISOString().split("T")[0];
     const folderName = `Podklady-hlasovanie-${dateString}`;
     const driveFolderId = await createDriveFolder(folderName);
 
@@ -43,12 +49,12 @@ export async function POST(request: Request) {
     const newPoll = await db.$transaction(async (tx) => {
       const poll = await tx.poll.create({
         data: {
-          title: basics.title.trim(),
-          reason: basics.reason.trim(),
+          title: basics.title,
+          reason: basics.reason,
           declarer: session.name,
           announcedAt: new Date(),
-          startAt: new Date(basics.start),
-          endAt: new Date(basics.end),
+          startAt: basics.startAt,
+          endAt: basics.endAt,
           status: PollStatus.active, // Set to active immediately
           driveFolderId,
           buildingId: building.id,
@@ -57,13 +63,13 @@ export async function POST(request: Request) {
               no: idx + 1,
               kind: "Spoločné",
               title: q.text.length > 40 ? q.text.slice(0, 37) + "..." : q.text,
-              text: q.text.trim(),
+              text: q.text,
               majorityType: (q.majority === "half-all" ? "half_all" :
                              q.majority === "twothirds-all" ? "twothirds_all" :
                              q.majority === "fourfifths-all" ? "fourfifths_all" :
                              q.majority === "half-present" ? "half_present" :
                              q.majority) as MajorityType,
-              note: q.note?.trim() || null
+              note: q.note
             }))
           }
         }
@@ -77,7 +83,7 @@ export async function POST(request: Request) {
 
     // 4. Dispatch invitation emails in the background (using Promise.all or async loop)
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const formattedEnd = new Date(basics.end).toLocaleString("sk-SK", {
+    const formattedEnd = basics.endAt.toLocaleString("sk-SK", {
       day: "numeric",
       month: "numeric",
       year: "numeric",

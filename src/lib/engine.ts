@@ -44,6 +44,31 @@ interface SubvoteRow extends VoteRow {
   ownerId: string;
 }
 
+export function filterEligibleUnits<T extends { status: string; votes: number }>(units: T[]): T[] {
+  return units.filter(unit => {
+    if (unit.status !== "active") return false;
+    if (!Number.isInteger(unit.votes) || unit.votes <= 0) {
+      throw new Error(`Počet hlasov aktívnej jednotky musí byť kladné celé číslo.`);
+    }
+    return true;
+  });
+}
+
+export function calculateNeed(majorityType: MajorityType | `${MajorityType}`, total: number, voted: number): number {
+  switch (majorityType) {
+    case MajorityType.half_all:
+      return Math.floor(total / 2) + 1;
+    case MajorityType.twothirds_all:
+      return Math.ceil(total * 2 / 3);
+    case MajorityType.fourfifths_all:
+      return Math.ceil(total * 4 / 5);
+    case MajorityType.all:
+      return total;
+    case MajorityType.half_present:
+      return Math.floor(voted / 2) + 1;
+  }
+}
+
 function computeEffectiveVote(
   unit: UnitWithOwners,
   questionNo: number,
@@ -144,24 +169,7 @@ function computeTally(
   const voted = agree + disagree + abstain;
 
   // Calculate required majority threshold
-  let need = 0;
-  switch (majorityType) {
-    case MajorityType.half_all:
-      need = Math.floor(total / 2) + 1;
-      break;
-    case MajorityType.twothirds_all:
-      need = Math.ceil(total * 2 / 3);
-      break;
-    case MajorityType.fourfifths_all:
-      need = Math.ceil(total * 4 / 5);
-      break;
-    case MajorityType.all:
-      need = total;
-      break;
-    case MajorityType.half_present:
-      need = Math.floor(voted / 2) + 1;
-      break;
-  }
+  const need = calculateNeed(majorityType, total, voted);
 
   // Status resolution
   let status: "approved" | "rejected" | "short";
@@ -204,7 +212,7 @@ export async function computePollResults(
 
   const [units, votes, subvotes] = await Promise.all([
     db.unit.findMany({
-      where: { buildingId: poll.buildingId },
+      where: { buildingId: poll.buildingId, status: "active" },
       orderBy: { no: "asc" },
       include: { owners: true }
     }),
@@ -249,8 +257,9 @@ export async function computePollResults(
     }
   }
 
+  const eligibleUnits = filterEligibleUnits(units);
   const effectiveVotes = new Map<string, Map<number, EffectiveVote>>();
-  for (const u of units) {
+  for (const u of eligibleUnits) {
     const perQuestion = new Map<number, EffectiveVote>();
     for (const q of poll.questions) {
       perQuestion.set(q.no, computeEffectiveVote(u, q.no, latestVotes, latestSubvotesByUnitQuestion));
@@ -261,10 +270,10 @@ export async function computePollResults(
   const treatAsClosed = opts?.treatAsClosed || poll.status === PollStatus.closed;
   const tallies = new Map<number, QuestionTally>();
   for (const q of poll.questions) {
-    tallies.set(q.no, computeTally(q.majorityType, q.no, units, effectiveVotes, treatAsClosed));
+    tallies.set(q.no, computeTally(q.majorityType, q.no, eligibleUnits, effectiveVotes, treatAsClosed));
   }
 
-  return { poll, units, tallies, effectiveVotes };
+  return { poll, units: eligibleUnits, tallies, effectiveVotes };
 }
 
 /**

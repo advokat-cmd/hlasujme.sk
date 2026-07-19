@@ -12,6 +12,7 @@ import { PageHead } from "./PageHead";
 import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { VOTE_STYLE } from "../ui/Pill";
 import { CloseModal } from "./CloseModal";
+import { sanitizeEmailPreview } from "@/lib/security/html";
 
 const extractDriveFileId = (url: string): string | null => {
   if (!url) return null;
@@ -109,7 +110,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       const params = new URLSearchParams(window.location.search);
       const queryTab = params.get("tab");
       if (queryTab && ["results", "units", "emails", "protocol", "documents"].includes(queryTab)) {
-        setTab(queryTab);
+        queueMicrotask(() => setTab(queryTab));
       }
     }
   }, []);
@@ -252,7 +253,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   };
 
   useEffect(() => {
-    fetchFiles();
+    queueMicrotask(() => void fetchFiles());
   }, [poll.id]);
 
   const disputedUnitsList = unitVotesList.filter((u) => u.disputed);
@@ -348,7 +349,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
     return {
       subject: formattedSubject,
-      body: <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
+      body: <div dangerouslySetInnerHTML={{ __html: sanitizeEmailPreview(previewHtml) }} />
     };
   };
 
@@ -796,7 +797,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                   <div style={{ flex: "1 1 340px", padding: "20px 24px", borderRight: "1px solid var(--line)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
                       <span style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--ink-soft)" }}>
-                        Hlasy „súhlasím" voči potrebnej väčšine
+                        Hlasy „súhlasím“ voči potrebnej väčšine
                       </span>
                       <span style={{ fontFamily: "var(--serif)", fontSize: 15, fontWeight: 600 }}>
                         {q.tally.agree} / <span style={{ color: "var(--ink-soft)" }}>{q.tally.need}</span>

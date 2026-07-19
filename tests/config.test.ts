@@ -7,7 +7,7 @@ test("AI instructions pin Hetzner and isolate the hlasujme schema", () => {
   assert.match(contents, /Hetzner/);
   assert.match(contents, /database `lemon`/);
   assert.match(contents, /schema `hlasujme`/);
-  assert.match(contents, /must not.*Lemon-owned/is);
+  assert.match(contents, /must not[\s\S]*Lemon-owned/i);
 });
 
 test("eslint excludes the non-production prototype", () => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ic } from "../ui/Icons";
 import { Btn } from "../ui/Button";
@@ -594,13 +594,14 @@ interface UnitFormProps {
 
 const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) => {
   const creating = !unitId;
+  const initialOwnerId = useId();
   const [no, setNo] = useState(unit?.no || "");
   const [type, setType] = useState(unit?.type || "byt");
   const [floor, setFloor] = useState(unit?.floor || "");
   const [email, setEmail] = useState(unit?.email || "");
   const [coMode, setCoMode] = useState(unit?.coMode || "single");
   const [owners, setOwners] = useState<any[]>(
-    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: Math.random().toString(), first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
+    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: initialOwnerId, first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -610,7 +611,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   };
 
   const addOwner = () => {
-    setOwners((os) => [...os, { id: Math.random().toString(), first: "", last: "", email: "", phone: "", birthDate: "", share: 0.5, role: "coowner", admin: false, password: "" }]);
+    setOwners((os) => [...os, { id: crypto.randomUUID(), first: "", last: "", email: "", phone: "", birthDate: "", share: 0.5, role: "coowner", admin: false, password: "" }]);
   };
 
   const rmOwner = (i: number) => {
@@ -618,8 +619,8 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   };
 
   const genPassword = () => {
-    const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    return Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const bytes = crypto.getRandomValues(new Uint8Array(18));
+    return Array.from(bytes, byte => byte.toString(16).padStart(2, "0")).join("");
   };
 
   const save = async () => {

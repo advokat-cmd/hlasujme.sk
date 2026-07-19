@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useId, useRef } from "react";
 import { useNarrow } from "./LayoutHelpers";
 import { Ic } from "./Icons";
 
@@ -25,7 +25,7 @@ export const Modal: React.FC<ModalProps> = ({
 }) => {
   const panelRef = useRef<HTMLDivElement>(null);
   const isMobile = useNarrow(600);
-  const titleId = useRef("modal-title-" + Math.random().toString(36).slice(2, 8)).current;
+  const titleId = `modal-title-${useId().replace(/:/g, "")}`;
 
   const onCloseRef = useRef(onClose);
   useEffect(() => {

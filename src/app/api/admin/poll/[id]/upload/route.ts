@@ -5,19 +5,11 @@ import { uploadFileToDrive, createDriveFolder } from "@/lib/gdrive";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import fs from "fs";
 import path from "path";
+import { randomUUID } from "node:crypto";
+import { hasValidDocumentSignature, isAllowedDocument } from "@/lib/security/documents";
+import { resolveStoragePath, storageRelativePath } from "@/lib/storage";
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
-
-function safeFileName(original: string): string {
-  const ext = path.extname(original).toLowerCase().slice(0, 10);
-  const base = path.basename(original, path.extname(original))
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-zA-Z0-9._-]+/g, "-")
-    .replace(/-+/g, "-")
-    .slice(0, 80) || "dokument";
-  return `${Date.now()}-${base}${ext}`;
-}
 
 export async function POST(
   request: Request,
@@ -48,6 +40,10 @@ export async function POST(
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json({ error: "Súbor je príliš veľký (max. 25 MB)." }, { status: 400 });
     }
+    const mimeType = file.type.toLowerCase();
+    if (!isAllowedDocument(mimeType, file.name)) {
+      return NextResponse.json({ error: "Tento typ súboru nie je povolený." }, { status: 400 });
+    }
 
     // Optional link to a question (used by the create-poll wizard)
     const questionNoRaw = formData.get("questionNo");
@@ -55,18 +51,22 @@ export async function POST(
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
+    if (!hasValidDocumentSignature(mimeType, buffer)) {
+      return NextResponse.json({ error: "Obsah súboru nezodpovedá deklarovanému typu." }, { status: 400 });
+    }
 
     // 1. PRIMARY: save the document on the server — voters must be able to
     // download it even when Google Drive is unavailable or not configured.
-    const storedName = safeFileName(file.name);
-    const uploadDir = path.join(process.cwd(), "storage", "uploads", pollId);
-    const relativePath = `/storage/uploads/${pollId}/${storedName}`;
+    const storedName = `${randomUUID()}${path.extname(file.name).toLowerCase()}`;
+    const absolutePath = resolveStoragePath(`uploads/${pollId}/${storedName}`);
+    const uploadDir = path.dirname(absolutePath);
+    const relativePath = storageRelativePath(absolutePath);
 
     try {
       if (!fs.existsSync(uploadDir)) {
         fs.mkdirSync(uploadDir, { recursive: true });
       }
-      fs.writeFileSync(path.join(uploadDir, storedName), buffer);
+      fs.writeFileSync(absolutePath, buffer);
     } catch (fsErr) {
       console.error("Failed to store uploaded document locally:", fsErr);
       return NextResponse.json({ error: "Uloženie súboru na server zlyhalo." }, { status: 500 });
@@ -87,7 +87,7 @@ export async function POST(
         }
       }
       if (folderId) {
-        driveFile = await uploadFileToDrive(folderId, file.name, file.type || "application/octet-stream", buffer);
+        driveFile = await uploadFileToDrive(folderId, file.name, mimeType, buffer);
       }
     } catch (driveErr) {
       console.error("Drive backup of uploaded document failed:", driveErr);
@@ -99,7 +99,7 @@ export async function POST(
         pollId,
         questionNo: questionNo && !Number.isNaN(questionNo) ? questionNo : null,
         name: file.name,
-        mimeType: file.type || "application/octet-stream",
+        mimeType,
         size: file.size,
         localPath: relativePath,
         driveFileId: driveFile?.id ?? null,

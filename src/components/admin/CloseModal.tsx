@@ -194,7 +194,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   marginTop: 6,
                 }}
               >
-                Po potvrdení sa vygeneruje finálna PDF zápisnica a zálohuje sa na Google Drive. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — po úspešnom zálohovaní ich odošlete tlačidlom „Odoslať vlastníkom" v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
+                Po potvrdení sa vygeneruje finálna PDF zápisnica a zálohuje sa na Google Drive. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — po úspešnom zálohovaní ich odošlete tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
               </div>
             </div>
           )}

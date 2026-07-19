@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/session";
+import { getAdminSession, revokeAdminSessions } from "@/lib/session";
 import { db } from "@/lib/db";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
+import { validateNewPassword } from "@/lib/security/input";
 
 export async function POST(request: Request) {
   try {
@@ -15,8 +16,11 @@ export async function POST(request: Request) {
     if (!oldPassword) {
       return NextResponse.json({ error: "Staré heslo je povinné." }, { status: 400 });
     }
-    if (!newPassword || newPassword.trim().length < 6) {
-      return NextResponse.json({ error: "Nové heslo musí mať aspoň 6 znakov." }, { status: 400 });
+    let normalizedPassword: string;
+    try {
+      normalizedPassword = validateNewPassword(newPassword);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Neplatné nové heslo." }, { status: 400 });
     }
 
     const admin = await db.admin.findUnique({
@@ -33,7 +37,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Zadané staré heslo je nesprávne." }, { status: 400 });
     }
 
-    const passwordHash = await argon2.hash(newPassword.trim(), {
+    const passwordHash = await argon2.hash(normalizedPassword, {
       type: argon2.argon2id
     });
 
@@ -41,6 +45,7 @@ export async function POST(request: Request) {
       where: { id: session.adminId },
       data: { passwordHash }
     });
+    await revokeAdminSessions(session.adminId);
 
     await createAuditLogEntry("PASSWORD_CHANGED", `user:${session.email}`, {
       message: `Používateľ ${session.name} (${session.email}) si zmenil prihlasovacie heslo.`,

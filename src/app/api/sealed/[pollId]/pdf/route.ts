@@ -5,6 +5,8 @@ import fs from "fs";
 import path from "path";
 import { downloadFileFromDrive, listFilesInFolder } from "@/lib/gdrive";
 import { verifySealedPdfAccess } from "@/lib/protocolEmail";
+import { resolveStoragePath } from "@/lib/storage";
+import { verifySha256 } from "@/lib/seal";
 
 export async function GET(
   request: Request,
@@ -20,22 +22,28 @@ export async function GET(
     const signature = url.searchParams.get("sig");
     const session = await getAdminSession();
 
-    if (!session && !verifySealedPdfAccess(pollId, signature)) {
-      return NextResponse.json({ error: "Prístup k zápisnici vyžaduje prihlásenie alebo platný odkaz z e-mailu." }, { status: 403 });
-    }
-
     // 2. Fetch SealedResult record
     const sealedResult = await db.sealedResult.findUnique({
-      where: { pollId }
+      where: { pollId },
+      include: { poll: true },
     });
 
     if (!sealedResult) {
       return NextResponse.json({ error: "Zápisnica pre toto hlasovanie zatiaľ nebola vytvorená." }, { status: 404 });
     }
+    let authorized = verifySealedPdfAccess(pollId, signature);
+    if (session?.role === "admin" || session?.role === "superadmin") authorized = true;
+    if (!authorized && session?.unitId) {
+      const unit = await db.unit.findUnique({ where: { id: session.unitId }, select: { buildingId: true } });
+      authorized = unit?.buildingId === sealedResult.poll.buildingId;
+    }
+    if (!authorized) {
+      return NextResponse.json({ error: "Prístup k zápisnici vyžaduje oprávnený účet alebo platný odkaz z e-mailu." }, { status: 403 });
+    }
 
     // 3. Resolve the PDF: local storage first, Google Drive backup second
     const fileName = path.basename(sealedResult.pdfPath);
-    const absolutePath = path.join(process.cwd(), "storage", "sealed", fileName);
+    const absolutePath = resolveStoragePath(sealedResult.pdfPath);
 
     let fileBuffer: Buffer | null = null;
 
@@ -61,6 +69,9 @@ export async function GET(
 
     if (!fileBuffer) {
       return NextResponse.json({ error: "Súbor zápisnice nebol nájdený." }, { status: 404 });
+    }
+    if (!verifySha256(fileBuffer, sealedResult.sha256)) {
+      return NextResponse.json({ error: "Integrita zapečatenej zápisnice bola porušená." }, { status: 409 });
     }
 
     // 4. Return PDF response (ASCII-safe filename fallback for the header)

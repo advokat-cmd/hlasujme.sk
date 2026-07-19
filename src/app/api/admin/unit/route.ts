@@ -4,6 +4,8 @@ import { db } from "@/lib/db";
 import { UnitType, CoMode, OwnerRole } from "@prisma/client";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
+import { validateNewPassword, validateOwners } from "@/lib/security/input";
+import { assertAccountMutationAllowed } from "@/lib/security/accounts";
 
 export async function POST(request: Request) {
   try {
@@ -18,17 +20,35 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { no, type, floor, email, coMode, owners } = body as {
+    const { no, type, floor, email, coMode } = body as {
       no: string;
       type: "byt" | "nebyt";
       floor: string;
       email: string;
       coMode: string;
-      owners: any[];
     };
 
     if (!no) {
       return NextResponse.json({ error: "Číslo jednotky je povinné." }, { status: 400 });
+    }
+
+    let owners;
+    try {
+      owners = validateOwners(body.owners, coMode);
+      for (const owner of owners) {
+        if (!owner.admin && !owner.password) continue;
+        if (!owner.email) throw new Error("Prihlasovací účet vyžaduje e-mail.");
+        if (!owner.password) throw new Error("Nový prihlasovací účet vyžaduje bezpečné heslo.");
+        validateNewPassword(owner.password);
+        const requestedRole = owner.admin ? "admin" : "vlastnik";
+        assertAccountMutationAllowed(session, null, requestedRole);
+        const conflict = await db.admin.findUnique({ where: { email: owner.email } });
+        if (conflict) {
+          return NextResponse.json({ error: `E-mail ${owner.email} už používa iný účet.` }, { status: 409 });
+        }
+      }
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Neplatné údaje vlastníkov." }, { status: 400 });
     }
 
     // Check duplicate
@@ -47,18 +67,18 @@ export async function POST(request: Request) {
         floor: floor.trim(),
         votes: 1,
         coMode: coMode as CoMode,
-        email: email.trim() || null,
+        email: typeof email === "string" && email.trim() ? email.trim().toLowerCase() : null,
         buildingId: building.id,
         owners: {
           create: owners.map((o) => ({
-            first: o.first.trim(),
-            last: o.last.trim(),
-            name: `${o.first.trim()} ${o.last.trim()}`.trim(),
-            email: o.email.trim() || null,
-            phone: o.phone?.trim() || null,
-            birthDate: o.birthDate?.trim() || null,
-            share: o.share || 1.0,
-            role: o.role as OwnerRole || OwnerRole.owner,
+            first: o.first,
+            last: o.last,
+            name: `${o.first} ${o.last}`,
+            email: o.email || null,
+            phone: o.phone || null,
+            birthDate: o.birthDate || null,
+            share: o.share,
+            role: o.role as OwnerRole,
           })),
         },
       },
@@ -73,9 +93,7 @@ export async function POST(request: Request) {
       const loginEmail = o.email?.trim().toLowerCase();
       if (loginEmail && (o.admin || o.password)) {
         const role = o.admin ? "admin" : "vlastnik";
-        const passwordHash = o.password 
-          ? await argon2.hash(o.password, { type: argon2.argon2id })
-          : await argon2.hash("demo1234", { type: argon2.argon2id });
+        const passwordHash = await argon2.hash(validateNewPassword(o.password), { type: argon2.argon2id });
         const ownerRecord = unit.owners[i];
         
         await db.admin.upsert({

@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/session";
+import { getAdminSession, revokeAdminSessions } from "@/lib/session";
 import { db } from "@/lib/db";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import { sendEmail, getCredentialsEmail } from "@/lib/email";
 import * as argon2 from "argon2";
+import { generateTemporaryPassword } from "@/lib/security/passwords";
+import { assertAccountMutationAllowed, assertOwnerBelongsToUnit } from "@/lib/security/accounts";
 
 export async function POST(
   request: Request,
@@ -30,6 +32,12 @@ export async function POST(
       return NextResponse.json({ error: "Jednotka alebo vlastník nebol nájdený." }, { status: 404 });
     }
 
+    try {
+      assertOwnerBelongsToUnit(owner, unitId);
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Vlastník nepatrí do jednotky." }, { status: 400 });
+    }
+
     if (!owner.email) {
       return NextResponse.json({ error: "Vlastník nemá zadanú e-mailovú adresu." }, { status: 400 });
     }
@@ -37,8 +45,7 @@ export async function POST(
     const loginEmail = owner.email.trim().toLowerCase();
 
     // 1. Generate random password
-    const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-    const rawPassword = Array.from({ length: 10 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+    const rawPassword = generateTemporaryPassword();
 
     // 2. Hash password
     const passwordHash = await argon2.hash(rawPassword, {
@@ -46,24 +53,34 @@ export async function POST(
     });
 
     // 3. Upsert admin record with role 'vlastnik'
-    const dbAdmin = await db.admin.upsert({
-      where: { email: loginEmail },
-      update: {
+    const [ownerAccount, emailAccount] = await Promise.all([
+      db.admin.findFirst({ where: { ownerId: owner.id } }),
+      db.admin.findUnique({ where: { email: loginEmail } }),
+    ]);
+    if (emailAccount && emailAccount.ownerId !== owner.id) {
+      return NextResponse.json({ error: "E-mail už používa iný účet." }, { status: 409 });
+    }
+    const existingAccount = ownerAccount ?? emailAccount;
+    try {
+      assertAccountMutationAllowed(session, existingAccount, "vlastnik");
+    } catch (error) {
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Nedostatočné oprávnenia." }, { status: 403 });
+    }
+
+    const accountData = {
         name: owner.name,
         passwordHash,
         role: "vlastnik",
         unitId: unit.id,
         ownerId: owner.id
-      },
-      create: {
+    };
+    const dbAdmin = existingAccount
+      ? await db.admin.update({ where: { id: existingAccount.id }, data: { ...accountData, email: loginEmail } })
+      : await db.admin.create({ data: {
         email: loginEmail,
-        name: owner.name,
-        passwordHash,
-        role: "vlastnik",
-        unitId: unit.id,
-        ownerId: owner.id
-      }
-    });
+        ...accountData,
+      } });
+    await revokeAdminSessions(dbAdmin.id);
 
     // 4. Send Email using sendEmail
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";

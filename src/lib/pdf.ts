@@ -127,9 +127,9 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
     doc.on("end", () => resolve(Buffer.concat(chunks)));
     doc.on("error", (err) => reject(err));
 
-    const { t, useBold, useRegular } = setupPdfFonts(doc);
+    const { t, useBold: setBold, useRegular: setRegular } = setupPdfFonts(doc);
     const bold = (txt: string) => {
-      useBold();
+      setBold();
       return t(txt);
     };
 
@@ -142,21 +142,21 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
 
     // Metadata section
     doc.fontSize(11);
-    doc.text(t("Vyhlasovateľ: "), { continued: true }).text(bold(poll.declarer)); useRegular();
-    doc.text(t("Začiatok hlasovania: "), { continued: true }).text(bold(poll.startAt.toLocaleString("sk-SK"))); useRegular();
-    doc.text(t("Koniec hlasovania: "), { continued: true }).text(bold(poll.endAt.toLocaleString("sk-SK"))); useRegular();
-    doc.text(t("Status hlasovania: "), { continued: true }).text(bold("Uzavreté a zapečatené")); useRegular();
-    doc.text(t("Zverejnené dňa: "), { continued: true }).text(bold(new Date().toLocaleString("sk-SK"))); useRegular();
+    doc.text(t("Vyhlasovateľ: "), { continued: true }).text(bold(poll.declarer)); setRegular();
+    doc.text(t("Začiatok hlasovania: "), { continued: true }).text(bold(poll.startAt.toLocaleString("sk-SK"))); setRegular();
+    doc.text(t("Koniec hlasovania: "), { continued: true }).text(bold(poll.endAt.toLocaleString("sk-SK"))); setRegular();
+    doc.text(t("Status hlasovania: "), { continued: true }).text(bold("Uzavreté a zapečatené")); setRegular();
+    doc.text(t("Zverejnené dňa: "), { continued: true }).text(bold(new Date().toLocaleString("sk-SK"))); setRegular();
     doc.moveDown(1.5);
 
     doc.fontSize(13);
-    doc.text(bold("VÝSLEDKY HLASOVANIA PODĽA OTÁZOK")); useRegular();
+    doc.text(bold("VÝSLEDKY HLASOVANIA PODĽA OTÁZOK")); setRegular();
     doc.moveDown(0.5);
 
     // Questions results
     for (const r of results) {
       doc.fontSize(11);
-      doc.text(bold(`Otázka č. ${r.no} (${r.kind})`)); useRegular();
+      doc.text(bold(`Otázka č. ${r.no} (${r.kind})`)); setRegular();
       doc.text(t(r.text), { indent: 15 });
       doc.fillColor("#1B2330");
       doc.moveDown(0.3);
@@ -194,7 +194,7 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
     // Annex: per-unit vote list
     doc.addPage();
     doc.fontSize(13);
-    doc.text(bold("PRÍLOHA Č. 1: MENNÝ ZOZNAM HLASOVANIA JEDNOTIEK")); useRegular();
+    doc.text(bold("PRÍLOHA Č. 1: MENNÝ ZOZNAM HLASOVANIA JEDNOTIEK")); setRegular();
     doc.moveDown(0.5);
 
     doc.fontSize(9);
@@ -214,7 +214,7 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
         doc.text(bold(`Otázka ${q.no}`), colX(i), y);
       });
       doc.strokeColor("#E5DFD3").lineWidth(1).moveTo(50, y + 12).lineTo(colEndX, y + 12).stroke();
-      useRegular();
+      setRegular();
       return y + 18;
     };
 

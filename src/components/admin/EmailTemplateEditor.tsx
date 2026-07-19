@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Ic } from "../ui/Icons";
 import { Btn } from "../ui/Button";
+import { sanitizeEmailPreview } from "@/lib/security/html";
 
 interface EmailTemplateEditorProps {
   value: string;
@@ -118,22 +119,22 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
   const [editorMode, setEditorMode] = useState<"wysiwyg" | "code">("wysiwyg");
   const editorRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [lastTemplateKey, setLastTemplateKey] = useState(templateKey);
+  const lastTemplateKey = useRef(templateKey);
 
   // Sync state on template change
   useEffect(() => {
-    if (templateKey !== lastTemplateKey) {
-      setLastTemplateKey(templateKey);
+    if (templateKey !== lastTemplateKey.current) {
+      lastTemplateKey.current = templateKey;
       if (editorRef.current) {
-        editorRef.current.innerHTML = value;
+        editorRef.current.innerHTML = sanitizeEmailPreview(value);
       }
     }
-  }, [templateKey, value, lastTemplateKey]);
+  }, [templateKey, value]);
 
   // Set initial content
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && value) {
-      editorRef.current.innerHTML = value;
+      editorRef.current.innerHTML = sanitizeEmailPreview(value);
     }
   }, [value]);
 
@@ -255,7 +256,7 @@ export const EmailTemplateEditor: React.FC<EmailTemplateEditorProps> = ({
       // Sync code changes to wysiwyg before visual view
       setTimeout(() => {
         if (editorRef.current) {
-          editorRef.current.innerHTML = value;
+          editorRef.current.innerHTML = sanitizeEmailPreview(value);
         }
       }, 0);
     }

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Public_Sans, Spectral, Newsreader, Lora } from "next/font/google";
 import "./globals.css";
+import { connection } from "next/server";
 
 const publicSans = Public_Sans({
   subsets: ["latin", "latin-ext"],
@@ -31,11 +32,12 @@ export const metadata: Metadata = {
   description: "Elektronické hlasovanie vlastníkov bytov a nebytových priestorov podľa zákona č. 182/1993 Z. z.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  await connection();
   return (
     <html
       lang="sk"
