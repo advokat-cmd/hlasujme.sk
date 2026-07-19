@@ -1,0 +1,136 @@
+name: Migrate Hlasujme to Lemon Database
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: hlasujme-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Migrate database and deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 20m
+          script: |
+            set -euo pipefail
+            cd /var/www/hlasovanie
+            git config --global --add safe.directory /var/www/hlasovanie
+            git fetch origin main
+            git checkout main
+            git reset --hard origin/main
+            npm ci --include=dev
+
+            OLD_DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export OLD_DATABASE_URL
+            OLD_PG_URL="$(node -e 'const u=new URL(process.env.OLD_DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+            TARGET_DATABASE_URL="$(node -e 'const u=new URL(process.env.OLD_DATABASE_URL);u.pathname="/lemon";u.searchParams.set("schema","hlasujme");process.stdout.write(u.toString())')"
+            TARGET_PG_URL="$(TARGET_DATABASE_URL="$TARGET_DATABASE_URL" node -e 'const u=new URL(process.env.TARGET_DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+            export TARGET_DATABASE_URL
+
+            node - <<'NODE'
+            const oldUrl = new URL(process.env.OLD_DATABASE_URL);
+            const targetUrl = new URL(process.env.TARGET_DATABASE_URL);
+            if (oldUrl.pathname !== "/hlasovanie" || (oldUrl.searchParams.get("schema") || "public") !== "public") {
+              throw new Error("Refusing migration: unexpected source database boundary");
+            }
+            if (targetUrl.pathname !== "/lemon" || targetUrl.searchParams.get("schema") !== "hlasujme") {
+              throw new Error("Refusing migration: unexpected target database boundary");
+            }
+            NODE
+
+            TARGET_TABLES="$(psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM information_schema.tables WHERE table_schema='hlasujme'")"
+            if [ "$TARGET_TABLES" != "0" ]; then
+              echo "Refusing migration: target schema hlasujme is not empty"
+              exit 1
+            fi
+
+            BACKUP_DIR=/var/backups/hlasujme
+            install -d -m 700 "$BACKUP_DIR"
+            STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+            SOURCE_BACKUP="$BACKUP_DIR/hlasovanie-public-$STAMP.dump"
+            DATA_SQL="$BACKUP_DIR/hlasovanie-data-$STAMP.sql"
+            MAPPED_SQL="$BACKUP_DIR/hlasujme-data-$STAMP.sql"
+            pg_dump --dbname="$OLD_PG_URL" --schema=public --format=custom --file="$SOURCE_BACKUP"
+            chmod 600 "$SOURCE_BACKUP"
+            test -s "$SOURCE_BACKUP"
+
+            pg_dump --dbname="$OLD_PG_URL" --schema=public --exclude-table=public._prisma_migrations --data-only --column-inserts --no-owner --no-privileges --file="$DATA_SQL"
+            sed '/^INSERT INTO "public"\./s/^INSERT INTO "public"\./INSERT INTO "hlasujme"./' "$DATA_SQL" > "$MAPPED_SQL"
+            chmod 600 "$DATA_SQL" "$MAPPED_SQL"
+            test -s "$MAPPED_SQL"
+
+            CREATED_TARGET=0
+            cleanup_failed_migration() {
+              if [ "$CREATED_TARGET" = "1" ]; then
+                psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -c 'DROP SCHEMA IF EXISTS "hlasujme" CASCADE'
+              fi
+            }
+            trap cleanup_failed_migration ERR
+
+            psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -c 'CREATE SCHEMA "hlasujme"'
+            CREATED_TARGET=1
+            DATABASE_URL="$TARGET_DATABASE_URL" npx prisma migrate deploy
+            psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 --single-transaction --file="$MAPPED_SQL"
+
+            for table in Admin AuditLog Building CoownerSubvote EmailTemplate Owner Poll PollDocument ProtocolEmailLog Question QuestionTemplate SealedResult Unit Vote VoteToken; do
+              old_count="$(psql "$OLD_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM \"public\".\"$table\"")"
+              new_count="$(psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT count(*) FROM \"hlasujme\".\"$table\"")"
+              if [ "$old_count" != "$new_count" ]; then
+                echo "Row-count mismatch for $table: source=$old_count target=$new_count"
+                exit 1
+              fi
+              echo "$table rows verified: $new_count"
+            done
+
+            ENV_BACKUP="$BACKUP_DIR/env-$STAMP"
+            install -m 600 .env "$ENV_BACKUP"
+            STORAGE_ROOT=/var/lib/hlasujme/storage
+            SERVICE_USER="$(systemctl show hlasovanie --property=User --value)"
+            if [ -z "$SERVICE_USER" ]; then SERVICE_USER=root; fi
+            install -d -o "$SERVICE_USER" -g "$SERVICE_USER" -m 750 "$STORAGE_ROOT"
+            if [ -d /var/www/hlasovanie/storage ]; then
+              cp -a /var/www/hlasovanie/storage/. "$STORAGE_ROOT/"
+              chown -R "$SERVICE_USER:$SERVICE_USER" "$STORAGE_ROOT"
+            fi
+
+            node - <<'NODE'
+            const { randomBytes } = require("node:crypto");
+            const fs = require("node:fs");
+            const dotenv = require("dotenv");
+            const file = ".env";
+            const original = fs.readFileSync(file, "utf8");
+            const parsed = dotenv.parse(original);
+            const updates = {
+              DATABASE_URL: process.env.TARGET_DATABASE_URL,
+              STORAGE_ROOT: "/var/lib/hlasujme/storage",
+              TRUST_PROXY: "1",
+              SESSION_SECRET: parsed.SESSION_SECRET?.length >= 32
+                ? parsed.SESSION_SECRET
+                : randomBytes(32).toString("hex"),
+            };
+            let text = original;
+            for (const [key, value] of Object.entries(updates)) {
+              const line = `${key}=${JSON.stringify(value)}`;
+              const pattern = new RegExp(`^${key}=.*$`, "m");
+              text = pattern.test(text) ? text.replace(pattern, line) : `${text.trimEnd()}\n${line}\n`;
+            }
+            fs.writeFileSync(".env.next", text, { mode: 0o600 });
+            fs.renameSync(".env.next", file);
+            NODE
+
+            trap - ERR
+            CREATED_TARGET=0
+            export NODE_OPTIONS="--max-old-space-size=3072"
+            npm run build
+            systemctl restart hlasovanie
+            systemctl is-active --quiet hlasovanie
+            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/admin/login >/dev/null
