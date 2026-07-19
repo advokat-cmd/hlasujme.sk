@@ -2,40 +2,60 @@ name: Deploy to Production
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: hlasujme-production
+  cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Deploy to Server via SSH
+      - name: Deploy safely via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
+          command_timeout: 15m
           script: |
-            set -e
+            set -euo pipefail
             cd /var/www/hlasovanie
             git config --global --add safe.directory /var/www/hlasovanie
-            git fetch --all
+            git fetch origin main
             git checkout main
             git reset --hard origin/main
-            
-            # Install dependencies (development dependencies are required for build)
-            npm install --production=false
-            
-            # Run database schema push
-            npx prisma db push
-            
-            # Build the Next.js application
+
+            npm ci --include=dev
+
+            DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export DATABASE_URL
+            node - <<'NODE'
+            const url = new URL(process.env.DATABASE_URL);
+            const database = url.pathname.replace(/^\//, "");
+            const schema = url.searchParams.get("schema");
+            if (database !== "lemon" || schema !== "hlasujme") {
+              throw new Error("Refusing deploy: DATABASE_URL must target database lemon and schema hlasujme");
+            }
+            NODE
+
+            BACKUP_DIR=/var/backups/hlasujme
+            install -d -m 700 "$BACKUP_DIR"
+            BACKUP_FILE="$BACKUP_DIR/hlasujme-$(date -u +%Y%m%dT%H%M%SZ).dump"
+            pg_dump --dbname="$DATABASE_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+            chmod 600 "$BACKUP_FILE"
+            test -s "$BACKUP_FILE"
+
+            npx prisma migrate deploy
             export NODE_OPTIONS="--max-old-space-size=3072"
             npm run build
-            
-            # Restart the systemd service
             systemctl restart hlasovanie
+            systemctl is-active --quiet hlasovanie
+            curl --fail --silent --show-error --max-time 15 http://127.0.0.1:3000/admin/login >/dev/null
