@@ -69,7 +69,7 @@ jobs:
             test -s "$SOURCE_BACKUP"
 
             pg_dump --dbname="$OLD_PG_URL" --schema=public --exclude-table=public._prisma_migrations --data-only --column-inserts --no-owner --no-privileges --file="$DATA_SQL"
-            sed '/^INSERT INTO "public"\./s/^INSERT INTO "public"\./INSERT INTO "hlasujme"./' "$DATA_SQL" > "$MAPPED_SQL"
+            sed -e '/^INSERT INTO public\./s/^INSERT INTO public\./INSERT INTO hlasujme./' -e '/^INSERT INTO "public"\./s/^INSERT INTO "public"\./INSERT INTO "hlasujme"./' "$DATA_SQL" > "$MAPPED_SQL"
             chmod 600 "$DATA_SQL" "$MAPPED_SQL"
             test -s "$MAPPED_SQL"
 
