@@ -81,7 +81,7 @@ jobs:
             }
             trap cleanup_failed_migration ERR
 
-            runuser -u postgres -- psql -d lemon -v ON_ERROR_STOP=1 -c "CREATE SCHEMA \"hlasujme\" AUTHORIZATION \"$TARGET_ROLE\""
+            runuser -u postgres -- psql -d lemon -v ON_ERROR_STOP=1 -c "CREATE SCHEMA IF NOT EXISTS \"hlasujme\" AUTHORIZATION \"$TARGET_ROLE\"; ALTER SCHEMA \"hlasujme\" OWNER TO \"$TARGET_ROLE\""
             CREATED_TARGET=1
             DATABASE_URL="$TARGET_DATABASE_URL" npx prisma migrate deploy
             psql "$TARGET_PG_URL" -v ON_ERROR_STOP=1 --single-transaction --file="$MAPPED_SQL"
