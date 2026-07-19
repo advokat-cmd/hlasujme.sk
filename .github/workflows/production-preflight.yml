@@ -28,4 +28,8 @@ jobs:
             console.log(`configured_schema=${schema}`);
             NODE
             command -v pg_dump >/dev/null
-            psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT 'connected=true'; SELECT 'lemon_exists=' || EXISTS(SELECT 1 FROM pg_database WHERE datname='lemon'); SELECT 'configured_tables=' || count(*) FROM information_schema.tables WHERE table_schema=current_schema();"
+            PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+            DB_SCHEMA="$(node -e 'const u=new URL(process.env.DATABASE_URL);process.stdout.write(u.searchParams.get("schema") || "public")')"
+            LEMON_PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.pathname="/lemon";u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+            psql "$PG_URL" -v ON_ERROR_STOP=1 -v schema="$DB_SCHEMA" -Atc "SELECT 'connected=true'; SELECT 'lemon_exists=' || EXISTS(SELECT 1 FROM pg_database WHERE datname='lemon'); SELECT 'configured_tables=' || count(*) FROM information_schema.tables WHERE table_schema=:'schema';"
+            psql "$LEMON_PG_URL" -v ON_ERROR_STOP=1 -Atc "SELECT 'lemon_connected=true'; SELECT 'hlasujme_schema_exists=' || EXISTS(SELECT 1 FROM information_schema.schemata WHERE schema_name='hlasujme'); SELECT 'hlasujme_tables=' || count(*) FROM information_schema.tables WHERE table_schema='hlasujme';"

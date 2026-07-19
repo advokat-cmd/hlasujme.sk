@@ -46,10 +46,12 @@ jobs:
             }
             NODE
 
+            PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+
             BACKUP_DIR=/var/backups/hlasujme
             install -d -m 700 "$BACKUP_DIR"
             BACKUP_FILE="$BACKUP_DIR/hlasujme-$(date -u +%Y%m%dT%H%M%SZ).dump"
-            pg_dump --dbname="$DATABASE_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+            pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
             chmod 600 "$BACKUP_FILE"
             test -s "$BACKUP_FILE"
 
