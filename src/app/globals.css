@@ -1,6 +1,6 @@
 :root {
-  --serif: var(--font-spectral-google), Georgia, 'Times New Roman', serif;
-  --sans: var(--font-sans-google), system-ui, -apple-system, sans-serif;
+  --serif: Georgia, 'Times New Roman', serif;
+  --sans: system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --paper: #F4F1EA;
   --paper-2: #ECE7DC;
@@ -165,6 +165,5 @@ button {
   color: #ffffff;
   box-shadow: 0 4px 6px -1px rgba(31, 58, 95, 0.15), 0 2px 4px -1px rgba(31, 58, 95, 0.08);
 }
-
 
 

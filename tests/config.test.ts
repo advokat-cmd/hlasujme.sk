@@ -14,3 +14,8 @@ test("eslint excludes the non-production prototype", () => {
   const contents = readFileSync("eslint.config.mjs", "utf8");
   assert.match(contents, /Working prototype development\/\*\*/);
 });
+
+test("production build does not depend on downloading Google fonts", () => {
+  const layout = readFileSync("src/app/layout.tsx", "utf8");
+  assert.doesNotMatch(layout, /next\/font\/google/);
+});
