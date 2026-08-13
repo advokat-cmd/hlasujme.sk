@@ -1,0 +1,51 @@
+name: Relocate Legacy Storage
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Copy verified files and update Hlasujme paths"
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  relocate:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Relocate Hlasujme-owned legacy files via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            cd /var/www/hlasovanie
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+            npm run storage:relocate-legacy -- --dry-run
+
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+              export DATABASE_URL
+              node - <<'NODE'
+              const url = new URL(process.env.DATABASE_URL);
+              if (url.pathname.replace(/^\//, "") !== "lemon" || url.searchParams.get("schema") !== "hlasujme") {
+                throw new Error("Refusing relocation outside lemon/hlasujme");
+              }
+              NODE
+              PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+              BACKUP_DIR=/var/backups/hlasujme
+              install -d -m 700 "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/hlasujme-storage-relocation-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+              chmod 600 "$BACKUP_FILE"
+              test -s "$BACKUP_FILE"
+
+              npm run storage:relocate-legacy
+              npm run storage:relocate-legacy -- --dry-run
+            fi
