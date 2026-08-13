@@ -32,12 +32,7 @@ jobs:
             if [ "${{ inputs.apply }}" = "true" ]; then
               DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
               export DATABASE_URL
-              node - <<'NODE'
-              const url = new URL(process.env.DATABASE_URL);
-              if (url.pathname.replace(/^\//, "") !== "lemon" || url.searchParams.get("schema") !== "hlasujme") {
-                throw new Error("Refusing relocation outside lemon/hlasujme");
-              }
-              NODE
+              node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing relocation outside lemon/hlasujme")'
               PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
               BACKUP_DIR=/var/backups/hlasujme
               install -d -m 700 "$BACKUP_DIR"
