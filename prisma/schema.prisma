@@ -167,8 +167,7 @@ model Poll {
   documents         PollDocument[]
 }
 
-// Supporting document attached to a poll. Stored primarily on the server
-// (storage/uploads), with Google Drive as a best-effort backup.
+// Supporting document attached to a poll and stored on persistent server storage.
 model PollDocument {
   id          String   @id @default(uuid())
   pollId      String
@@ -290,7 +289,7 @@ model SealedResult {
   sealedAt   DateTime @default(now())
   pdfPath    String   // Path to PDF file on server
 
-  // Google Drive backup tracking
+  // Legacy Google Drive metadata retained for database compatibility; no longer written.
   driveFileId      String?
   driveWebViewLink String?
   driveUploadedAt  DateTime?

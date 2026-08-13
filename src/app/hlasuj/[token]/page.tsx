@@ -164,7 +164,7 @@ export default async function VoterPage({ params }: PageProps) {
   }
 
   // 4. Poll documents: server-stored documents from DB are the primary source;
-  // legacy polls (documents only in the Drive folder) fall back to a live listing.
+  // Documents are always resolved from database-backed persistent storage.
   const documents = await db.pollDocument.findMany({
     where: { pollId: poll.id },
     orderBy: { createdAt: "asc" }

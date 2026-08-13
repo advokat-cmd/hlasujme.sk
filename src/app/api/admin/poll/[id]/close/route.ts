@@ -151,7 +151,7 @@ export async function POST(
     );
 
     // Results are NOT emailed here — the admin sends them explicitly from the
-    // protocol tab once the Drive backup is confirmed.
+    // protocol tab once the sealed local result is available.
     return NextResponse.json({
       success: true,
       sha256: sealedResult.sha256,
