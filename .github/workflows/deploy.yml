@@ -27,11 +27,21 @@ jobs:
           command_timeout: 15m
           script: |
             set -euo pipefail
-            cd /var/www/hlasovanie
-            git config --global --add safe.directory /var/www/hlasovanie
+            SOURCE_DIR=/var/www/hlasovanie
+            RELEASES_DIR=/var/www/hlasovanie-releases
+            CURRENT_LINK=/var/www/hlasovanie-current
+            cd "$SOURCE_DIR"
+            git config --global --add safe.directory "$SOURCE_DIR"
             git fetch origin main
             git checkout main
             git reset --hard origin/main
+            RELEASE_SHA="$(git rev-parse origin/main)"
+            RELEASE_DIR="$RELEASES_DIR/$RELEASE_SHA-$(date -u +%Y%m%dT%H%M%SZ)"
+            install -d -m 755 "$RELEASES_DIR"
+            git worktree prune
+            git worktree add --detach "$RELEASE_DIR" "$RELEASE_SHA"
+            install -m 600 "$SOURCE_DIR/.env" "$RELEASE_DIR/.env"
+            cd "$RELEASE_DIR"
 
             npm ci --include=dev
 
@@ -58,6 +68,13 @@ jobs:
             npx prisma migrate deploy
             export NODE_OPTIONS="--max-old-space-size=3072"
             npm run build
+
+            PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+            ln -s "$RELEASE_DIR" "$CURRENT_LINK.new"
+            mv -Tf "$CURRENT_LINK.new" "$CURRENT_LINK"
+            install -d -m 755 /etc/systemd/system/hlasovanie.service.d
+            printf '%s\n' '[Service]' 'WorkingDirectory=/var/www/hlasovanie-current' > /etc/systemd/system/hlasovanie.service.d/release.conf
+            systemctl daemon-reload
             systemctl restart hlasovanie
             systemctl is-active --quiet hlasovanie
             for attempt in $(seq 1 30); do
@@ -66,6 +83,11 @@ jobs:
               fi
               if [ "$attempt" = "30" ]; then
                 echo "Production health check failed after 30 attempts"
+                if [ -n "$PREVIOUS_TARGET" ] && [ -d "$PREVIOUS_TARGET" ]; then
+                  ln -s "$PREVIOUS_TARGET" "$CURRENT_LINK.rollback"
+                  mv -Tf "$CURRENT_LINK.rollback" "$CURRENT_LINK"
+                  systemctl restart hlasovanie
+                fi
                 exit 1
               fi
               sleep 1

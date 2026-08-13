@@ -17,7 +17,7 @@ jobs:
           port: 22
           script: |
             set -euo pipefail
-            cd /var/www/hlasovanie
+            cd "$(readlink -f /var/www/hlasovanie-current 2>/dev/null || echo /var/www/hlasovanie)"
             DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
             export DATABASE_URL
             node - <<'NODE'

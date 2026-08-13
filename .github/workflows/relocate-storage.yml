@@ -24,8 +24,9 @@ jobs:
           command_timeout: 10m
           script: |
             set -euo pipefail
-            cd /var/www/hlasovanie
+            cd "$(readlink -f /var/www/hlasovanie-current 2>/dev/null || echo /var/www/hlasovanie)"
             test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+            export LEGACY_STORAGE_ROOT=/var/www/hlasovanie/storage
 
             npm run storage:relocate-legacy -- --dry-run
 
