@@ -833,6 +833,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ templates, emailTemp
                 ] : editingEmail.key === "confirmation" ? [
                   { name: "{ownerName}", desc: "Meno a priezvisko vlastníka" },
                   { name: "{unitNo}", desc: "Číslo bytu" },
+                  { name: "{buildingShort}", desc: "Skrátený názov bytového domu" },
                   { name: "{pollTitle}", desc: "Názov hlasovania" },
                   { name: "{dateFormatted}", desc: "Dátum a čas odovzdania" },
                   { name: "{answersList}", desc: "Zoznam zaznamenaných odpovedí" },

@@ -95,13 +95,47 @@ export function applyEmailStyles(html: string): string {
   return styled;
 }
 
-export async function getConfirmationEmail(params: {
+export interface ConfirmationEmailParams {
   ownerName: string;
   unitNo: string;
+  buildingShort: string;
   pollTitle: string;
   dateFormatted: string;
   answersSummary: { qNo: number; qTitle: string; answerText: string }[];
-}) {
+}
+
+export function renderConfirmationEmail(
+  template: EmailTemplateContent,
+  params: ConfirmationEmailParams,
+) {
+  const answersListHtml = params.answersSummary
+    .map(
+      a => `
+      <li style="margin-bottom: 8px;">
+        <strong>Otázka ${a.qNo}:</strong> ${a.qTitle} <br/>
+        Odpoveď: <span style="font-weight: bold; color: ${
+          a.answerText === "Súhlasím" ? "#2E7D5B" : a.answerText === "Nesúhlasím" ? "#B23A48" : "#6B6254"
+        }">${a.answerText}</span>
+      </li>
+    `
+    )
+    .join("");
+
+  const replaceAll = (value: string) => value
+    .replace(/{ownerName}/g, params.ownerName)
+    .replace(/{unitNo}/g, params.unitNo)
+    .replace(/{buildingShort}/g, params.buildingShort)
+    .replace(/{pollTitle}/g, params.pollTitle)
+    .replace(/{dateFormatted}/g, params.dateFormatted)
+    .replace(/{answersList}/g, answersListHtml);
+
+  return {
+    subject: replaceAll(template.subject),
+    html: applyEmailStyles(replaceAll(template.body)),
+  };
+}
+
+export async function getConfirmationEmail(params: ConfirmationEmailParams) {
   const template = await db.emailTemplate.findUnique({
     where: { key: "confirmation" }
   });
@@ -126,32 +160,7 @@ export async function getConfirmationEmail(params: {
     body = template.body;
   }
 
-  const answersListHtml = params.answersSummary
-    .map(
-      a => `
-      <li style="margin-bottom: 8px;">
-        <strong>Otázka ${a.qNo}:</strong> ${a.qTitle} <br/>
-        Odpoveď: <span style="font-weight: bold; color: ${
-          a.answerText === "Súhlasím" ? "#2E7D5B" : a.answerText === "Nesúhlasím" ? "#B23A48" : "#6B6254"
-        }">${a.answerText}</span>
-      </li>
-    `
-    )
-    .join("");
-
-  const replaceAll = (str: string) => {
-    return str
-      .replace(/{ownerName}/g, params.ownerName)
-      .replace(/{unitNo}/g, params.unitNo)
-      .replace(/{pollTitle}/g, params.pollTitle)
-      .replace(/{dateFormatted}/g, params.dateFormatted)
-      .replace(/{answersList}/g, answersListHtml);
-  };
-
-  return {
-    subject: replaceAll(subject),
-    html: applyEmailStyles(replaceAll(body))
-  };
+  return renderConfirmationEmail({ subject, body }, params);
 }
 
 export async function getReminderEmail(params: {

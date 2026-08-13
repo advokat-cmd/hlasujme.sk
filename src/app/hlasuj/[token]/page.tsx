@@ -170,7 +170,7 @@ export default async function VoterPage({ params }: PageProps) {
     orderBy: { createdAt: "asc" }
   });
 
-  const driveFiles: Array<{ id: string; name: string; webViewLink: string; mimeType: string }> =
+  const files: Array<{ id: string; name: string; webViewLink: string; mimeType: string }> =
     documents.map(d => ({
       id: d.id,
       name: d.name,
@@ -185,7 +185,7 @@ export default async function VoterPage({ params }: PageProps) {
     declarer: poll.declarer,
     startAt: poll.startAt.toISOString(),
     endAt: poll.endAt.toISOString(),
-    files: driveFiles,
+    files,
     questions: poll.questions.map((q) => ({
       id: q.id,
       no: q.no,

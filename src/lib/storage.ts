@@ -1,4 +1,5 @@
 import path from "node:path";
+import fs from "node:fs";
 
 export function getStorageRoot(): string {
   const configured = process.env.STORAGE_ROOT;
@@ -29,4 +30,9 @@ export function storageRelativePath(absolutePath: string): string {
     throw new Error("Cesta smeruje mimo povoleného úložiska.");
   }
   return relation.replace(/\\/g, "/");
+}
+
+export function readStoredFile(relativePath: string): Buffer | null {
+  const absolutePath = resolveStoragePath(relativePath);
+  return fs.existsSync(absolutePath) ? fs.readFileSync(absolutePath) : null;
 }

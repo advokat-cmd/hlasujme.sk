@@ -522,7 +522,7 @@ export default function CreatePollPage() {
                     
 
 
-                    <FormRow label="Podkladový dokument k otázke (nepovinné)" hint="Súbor bude nahraný na Google Drive a sprístupnený vlastníkom pri hlasovaní.">
+                    <FormRow label="Podkladový dokument k otázke (nepovinné)" hint="Súbor bude bezpečne uložený na serveri a sprístupnený vlastníkom pri hlasovaní.">
                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                         <input
                           type="file"

@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { downloadFileFromDrive } from "@/lib/gdrive";
-import fs from "fs";
 import { getAdminSession } from "@/lib/session";
 import { validateVoteToken } from "@/lib/tokens";
-import { resolveStoragePath } from "@/lib/storage";
+import { readStoredFile } from "@/lib/storage";
 
 /**
  * Serves a poll supporting document to voters and admins.
- * Local server storage is the primary source; Google Drive is the fallback.
+ * Persistent server storage is the sole file source.
  * Document IDs are unguessable UUIDs — same access model as the previous
  * public "anyone with the link" Drive sharing.
  */
@@ -44,18 +42,7 @@ export async function GET(
       return NextResponse.json({ error: "Na stiahnutie dokumentu nemáte oprávnenie." }, { status: 403 });
     }
 
-    let fileBuffer: Buffer | null = null;
-
-    if (document.localPath) {
-      const absolutePath = resolveStoragePath(document.localPath);
-      if (fs.existsSync(absolutePath)) {
-        fileBuffer = fs.readFileSync(absolutePath);
-      }
-    }
-
-    if (!fileBuffer && document.driveFileId) {
-      fileBuffer = await downloadFileFromDrive(document.driveFileId);
-    }
+    const fileBuffer = document.localPath ? readStoredFile(document.localPath) : null;
 
     if (!fileBuffer) {
       return NextResponse.json({ error: "Súbor dokumentu nebol nájdený." }, { status: 404 });

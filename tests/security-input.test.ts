@@ -2,11 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseVoteAnswers,
+  validateLoginInput,
   validateNewPassword,
   validateOwners,
   validatePollInput,
 } from "../src/lib/security/input";
 import { generateTemporaryPassword } from "../src/lib/security/passwords";
+
+test("login input is normalized and malformed input is rejected", () => {
+  assert.deepEqual(validateLoginInput({ email: " USER@Example.COM ", password: "secret" }), {
+    email: "user@example.com",
+    password: "secret",
+  });
+  assert.throws(() => validateLoginInput(null), /prihlas/i);
+  assert.throws(() => validateLoginInput({ email: "", password: "" }), /povinn/i);
+});
 
 test("vote answers reject unknown questions and enum values", () => {
   assert.throws(() => parseVoteAnswers({ "1": "yes" }, new Set([1])), /odpoveď/i);

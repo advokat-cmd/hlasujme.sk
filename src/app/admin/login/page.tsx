@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Ic } from "@/components/ui/Icons";
 import { Card } from "@/components/ui/Card";
@@ -14,7 +14,7 @@ export default function AdminLoginPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const submit = async (e?: any) => {
+  const submit = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === "function") {
       e.preventDefault();
     }
@@ -34,9 +34,10 @@ export default function AdminLoginPage() {
       if (!res.ok) {
         setError(data.error || "Prihlásenie zlyhalo.");
       } else {
-        window.location.href = "/admin";
+        router.replace("/admin");
+        router.refresh();
       }
-    } catch (err) {
+    } catch {
       setError("Vyskytla sa chyba sieťového pripojenia.");
     } finally {
       setLoading(false);
@@ -79,7 +80,7 @@ export default function AdminLoginPage() {
         </div>
         
         <Card>
-          <div>
+          <form onSubmit={submit}>
             <FormRow label="E-mail">
               <Input
                 type="email"
@@ -124,10 +125,10 @@ export default function AdminLoginPage() {
               </div>
             )}
             
-            <Btn onClick={submit} kind="primary" full size="lg" icon="lock" disabled={loading}>
+            <Btn type="submit" kind="primary" full size="lg" icon="lock" disabled={loading}>
               {loading ? "Prihlasovanie..." : "Prihlásiť sa"}
             </Btn>
-          </div>
+          </form>
         </Card>
 
       </div>

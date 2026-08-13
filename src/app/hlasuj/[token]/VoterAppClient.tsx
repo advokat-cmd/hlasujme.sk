@@ -8,12 +8,6 @@ import { Card } from "@/components/ui/Card";
 import { Ic } from "@/components/ui/Icons";
 import { VoteAnswer } from "@prisma/client";
 
-const extractDriveFileId = (url: string): string | null => {
-  if (!url) return null;
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
-};
-
 interface Question {
   id: string;
   no: number;
@@ -631,12 +625,10 @@ function VVote({
         {q.attachments && q.attachments.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 18 }}>
             {q.attachments.map((a, i) => {
-              const fileId = extractDriveFileId(a);
-              const href = fileId ? `/api/file/${fileId}` : a;
               return (
                 <a
                   key={i}
-                  href={href}
+                  href={a}
                   target="_blank"
                   rel="noopener noreferrer"
                   style={{

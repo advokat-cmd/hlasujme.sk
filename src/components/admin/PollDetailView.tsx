@@ -13,12 +13,7 @@ import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { VOTE_STYLE } from "../ui/Pill";
 import { CloseModal } from "./CloseModal";
 import { sanitizeEmailPreview } from "@/lib/security/html";
-
-const extractDriveFileId = (url: string): string | null => {
-  if (!url) return null;
-  const match = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
-  return match ? match[1] : null;
-};
+import { hasSealedProtocol } from "@/lib/protocolAvailability";
 
 interface ProtocolEmailLog {
   id: string;
@@ -39,8 +34,6 @@ interface PollDetailViewProps {
     sealedResult?: {
       pdfPath: string;
       sha256: string;
-      driveFileId?: string | null;
-      driveWebViewLink?: string | null;
     } | null;
     protocolEmailLogs?: ProtocolEmailLog[];
   };
@@ -140,32 +133,6 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       setProtocolError("Chyba sieťového pripojenia.");
     } finally {
       setSendingProtocol(false);
-    }
-  };
-
-  const [retryingDrive, setRetryingDrive] = useState(false);
-
-  const handleRetryDriveUpload = async () => {
-    setRetryingDrive(true);
-    setProtocolError("");
-    setProtocolSuccess("");
-
-    try {
-      const res = await fetch(`/api/admin/poll/${poll.id}/retry-drive-upload`, {
-        method: "POST",
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        setProtocolError(data.error || "Nahratie na Google Drive zlyhalo.");
-      } else {
-        setProtocolSuccess("Zápisnica bola úspešne nahratá na Google Drive.");
-        router.refresh();
-      }
-    } catch (err) {
-      setProtocolError("Chyba sieťového pripojenia.");
-    } finally {
-      setRetryingDrive(false);
     }
   };
 
@@ -691,8 +658,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {q.attachments.map((url, uIdx) => {
                               const fileInfo = files.find(f => f.webViewLink === url);
-                              const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
-                              const href = url.startsWith("/api/") ? url : (fileId ? `/api/file/${fileId}` : url);
+                              const href = fileInfo?.webViewLink || url;
                               const displayName = fileInfo ? fileInfo.name : "Podkladový dokument";
                               return (
                                 <a
@@ -757,9 +723,8 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                           <div style={{ marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
                             {q.attachments.map((url, uIdx) => {
                               const fileInfo = files.find(f => f.webViewLink === url);
-                              const fileId = fileInfo ? fileInfo.id : extractDriveFileId(url);
-                              const href = url.startsWith("/api/") ? url : (fileId ? `/api/file/${fileId}` : url);
-                              const displayName = fileInfo ? fileInfo.name : "Podkladový dokument (Google Drive)";
+                              const href = fileInfo?.webViewLink || url;
+                              const displayName = fileInfo ? fileInfo.name : "Podkladový dokument";
                               return (
                                 <a
                                   key={uIdx}
@@ -876,8 +841,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     </span>
                     {q.attachments.map((a, i) => {
                       const fileInfo = files.find(f => f.name === a || f.webViewLink === a);
-                      const fileId = fileInfo ? fileInfo.id : (a.startsWith("http") ? extractDriveFileId(a) : null);
-                      const href = a.startsWith("/api/") ? a : (fileId ? `/api/file/${fileId}` : "#");
+                      const href = fileInfo?.webViewLink || a;
                       const displayName = fileInfo ? fileInfo.name : a;
 
                       return (
@@ -1453,9 +1417,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     Hlasovanie bolo uzavreté a výsledky sú zapečatené
                   </h3>
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
-                    {poll.sealedResult?.driveFileId
-                      ? "Zápisnica bola úspešne vygenerovaná a zálohovaná. Môžete ju stiahnuť alebo odoslať odkaz na stiahnutie všetkým vlastníkom."
-                      : "Zápisnica bola úspešne vygenerovaná. Po zálohovaní na Google Drive ju budete môcť odoslať vlastníkom."}
+                    Zápisnica bola úspešne vygenerovaná a bezpečne uložená. Môžete ju stiahnuť alebo odoslať vlastníkom.
                   </p>
 
                   {protocolError && (
@@ -1472,29 +1434,6 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                     </div>
                   )}
 
-                  {poll.sealedResult && !poll.sealedResult.driveFileId && (
-                    <div style={{ color: "var(--accent-ink)", fontSize: "12.5px", marginTop: 10, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                      <Ic name="alert" size={14} style={{ flexShrink: 0 }} />
-                      <span style={{ flex: "1 1 200px" }}>
-                        Zápisnica zatiaľ nie je zálohovaná na Google Drive. Odoslanie vlastníkom bude možné po úspešnom zálohovaní.
-                      </span>
-                      <Btn kind="secondary" size="sm" disabled={retryingDrive} onClick={handleRetryDriveUpload}>
-                        {retryingDrive ? "Zálohujem..." : "Zálohovať na Drive"}
-                      </Btn>
-                    </div>
-                  )}
-
-                  {poll.sealedResult?.driveWebViewLink && (
-                    <div style={{ color: "var(--agree)", fontSize: "12.5px", marginTop: 8, display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
-                      <Ic name="checkCircle" size={14} style={{ flexShrink: 0 }} />
-                      <span>
-                        Zálohované na Google Drive —{" "}
-                        <a href={poll.sealedResult.driveWebViewLink} target="_blank" rel="noreferrer" style={{ color: "inherit" }}>
-                          zobraziť súbor
-                        </a>
-                      </span>
-                    </div>
-                  )}
                 </div>
 
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", flexShrink: 0, maxWidth: "100%" }}>
@@ -1505,7 +1444,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                       </Btn>
                     </a>
                   )}
-                  {poll.sealedResult?.driveFileId && (
+                  {hasSealedProtocol(poll.sealedResult) && (
                     <Btn
                       kind="primary"
                       icon="send"
@@ -1629,7 +1568,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>
                   {userRole === "vlastnik"
                     ? "Tieto dokumenty sú priložené k tomuto hlasovaniu. Môžete si ich kedykoľvek stiahnuť a prezerať."
-                    : "Tieto dokumenty sú uložené v zložke Google Drive. Môžete sem nahrať nové podklady alebo dokumenty k hlasovaniu, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať."}
+                    : "Tieto dokumenty sú bezpečne uložené na serveri. Môžete sem nahrať nové podklady, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať."}
                 </p>
               </div>
               {userRole !== "vlastnik" && (

@@ -5,6 +5,7 @@ import { consumeRateLimit, privateRateLimitKey } from "@/lib/security/rateLimit"
 import { getClientIp } from "@/lib/security/clientIp";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
+import { validateLoginInput } from "@/lib/security/input";
 
 export async function POST(request: Request) {
   try {
@@ -19,13 +20,19 @@ export async function POST(request: Request) {
       );
     }
 
-    const { email, password } = await request.json();
-    if (!email || !password) {
-      return NextResponse.json({ error: "E-mail a heslo sú povinné." }, { status: 400 });
+    let credentials: ReturnType<typeof validateLoginInput>;
+    try {
+      credentials = validateLoginInput(await request.json());
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Neplatné prihlasovacie údaje." },
+        { status: 400 },
+      );
     }
+    const { email, password } = credentials;
 
     const admin = await db.admin.findUnique({
-      where: { email: email.toLowerCase().trim() }
+      where: { email }
     });
 
     if (!admin) {

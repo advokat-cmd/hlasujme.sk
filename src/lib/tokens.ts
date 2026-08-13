@@ -113,7 +113,10 @@ export async function validateVoteToken(plainToken: string) {
     where: { tokenHash },
     include: {
       poll: {
-        include: { questions: { orderBy: { no: "asc" } } }
+        include: {
+          building: true,
+          questions: { orderBy: { no: "asc" } },
+        }
       },
       unit: {
         include: { owners: true }

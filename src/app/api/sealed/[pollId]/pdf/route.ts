@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import fs from "fs";
 import path from "path";
-import { downloadFileFromDrive, listFilesInFolder } from "@/lib/gdrive";
 import { verifySealedPdfAccess } from "@/lib/protocolEmail";
-import { resolveStoragePath } from "@/lib/storage";
+import { readStoredFile } from "@/lib/storage";
 import { verifySha256 } from "@/lib/seal";
 
 export async function GET(
@@ -41,31 +39,9 @@ export async function GET(
       return NextResponse.json({ error: "Prístup k zápisnici vyžaduje oprávnený účet alebo platný odkaz z e-mailu." }, { status: 403 });
     }
 
-    // 3. Resolve the PDF: local storage first, Google Drive backup second
+    // 3. Resolve the PDF from persistent server storage.
     const fileName = path.basename(sealedResult.pdfPath);
-    const absolutePath = resolveStoragePath(sealedResult.pdfPath);
-
-    let fileBuffer: Buffer | null = null;
-
-    if (fs.existsSync(absolutePath)) {
-      fileBuffer = fs.readFileSync(absolutePath);
-    } else if (sealedResult.driveFileId) {
-      fileBuffer = await downloadFileFromDrive(sealedResult.driveFileId);
-    } else {
-      // Legacy fallback for protocols sealed before drive file tracking:
-      // look the file up by name in the poll's Drive folder.
-      const poll = await db.poll.findUnique({ where: { id: pollId } });
-      if (poll?.driveFolderId) {
-        const files = await listFilesInFolder(poll.driveFolderId);
-        const pdfFile = files.find(f =>
-          f.name === fileName ||
-          (/z[áa]pisnica/i.test(f.name) && f.name.toLowerCase().endsWith(".pdf"))
-        );
-        if (pdfFile) {
-          fileBuffer = await downloadFileFromDrive(pdfFile.id);
-        }
-      }
-    }
+    const fileBuffer = readStoredFile(sealedResult.pdfPath);
 
     if (!fileBuffer) {
       return NextResponse.json({ error: "Súbor zápisnice nebol nájdený." }, { status: 404 });

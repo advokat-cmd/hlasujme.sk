@@ -57,9 +57,6 @@ export const CloseModal: React.FC<CloseModalProps> = ({
       if (!res.ok) {
         setError(data.error || "Nepodarilo sa uzavrieť hlasovanie.");
       } else {
-        if (data.driveError) {
-          alert(`Hlasovanie bolo uzavreté, ale záloha zápisnice na Google Drive zlyhala: ${data.driveError}\n\nZápisnicu môžete nahrať znova v detaile hlasovania tlačidlom „Nahrať na Drive".`);
-        }
         onSuccess();
       }
     } catch (err) {
@@ -194,7 +191,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   marginTop: 6,
                 }}
               >
-                Po potvrdení sa vygeneruje finálna PDF zápisnica a zálohuje sa na Google Drive. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — po úspešnom zálohovaní ich odošlete tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
+                Po potvrdení sa vygeneruje finálna PDF zápisnica a bezpečne uloží na serveri. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — odošlete ich tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
               </div>
             </div>
           )}

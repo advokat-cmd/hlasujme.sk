@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { uploadFileToDrive, createDriveFolder } from "@/lib/gdrive";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import fs from "fs";
 import path from "path";
@@ -56,7 +55,7 @@ export async function POST(
     }
 
     // 1. PRIMARY: save the document on the server — voters must be able to
-    // download it even when Google Drive is unavailable or not configured.
+    // download it from the persistent server storage.
     const storedName = `${randomUUID()}${path.extname(file.name).toLowerCase()}`;
     const absolutePath = resolveStoragePath(`uploads/${pollId}/${storedName}`);
     const uploadDir = path.dirname(absolutePath);
@@ -72,28 +71,7 @@ export async function POST(
       return NextResponse.json({ error: "Uloženie súboru na server zlyhalo." }, { status: 500 });
     }
 
-    // 2. BACKUP: best-effort upload to Google Drive
-    let driveFile: { id: string; webViewLink: string } | null = null;
-    try {
-      let folderId = poll.driveFolderId;
-      if (!folderId) {
-        const dateString = poll.startAt.toISOString().split("T")[0];
-        folderId = await createDriveFolder(`Podklady-hlasovanie-${dateString}`);
-        if (folderId) {
-          await db.poll.update({
-            where: { id: pollId },
-            data: { driveFolderId: folderId },
-          });
-        }
-      }
-      if (folderId) {
-        driveFile = await uploadFileToDrive(folderId, file.name, mimeType, buffer);
-      }
-    } catch (driveErr) {
-      console.error("Drive backup of uploaded document failed:", driveErr);
-    }
-
-    // 3. Register the document in the database
+    // Register the document in the database.
     const document = await db.pollDocument.create({
       data: {
         pollId,
@@ -102,8 +80,6 @@ export async function POST(
         mimeType,
         size: file.size,
         localPath: relativePath,
-        driveFileId: driveFile?.id ?? null,
-        webViewLink: driveFile?.webViewLink ?? null,
       },
     });
 
@@ -127,19 +103,16 @@ export async function POST(
       pollId,
       fileName: file.name,
       documentId: document.id,
-      driveFileId: driveFile?.id ?? null,
-      driveBackup: !!driveFile,
     });
 
     return NextResponse.json({
       success: true,
-      driveBackup: !!driveFile,
       document: {
         id: document.id,
         name: document.name,
         mimeType: document.mimeType,
         url: downloadUrl,
-        webViewLink: driveFile?.webViewLink ?? null,
+        webViewLink: downloadUrl,
       },
       // Backward-compatible shape for older callers
       file: {

@@ -1,5 +1,6 @@
 import { PrismaClient, UnitType, CoMode, OwnerRole, PollStatus, MajorityType, VoteAnswer } from "@prisma/client";
 import * as argon2 from "argon2";
+import { assertSafeDestructiveDatabase } from "../scripts/check-db-boundary";
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,7 @@ const stripDia = (s: string) => s.toLowerCase()
 const mkEmail = (first: string, last: string) => `${stripDia(first)}.${stripDia(last)}@email.sk`;
 
 async function main() {
+  assertSafeDestructiveDatabase();
   console.log("Starting database seeding...");
 
   // Delete all existing data

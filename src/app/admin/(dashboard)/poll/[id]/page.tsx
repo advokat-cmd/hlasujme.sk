@@ -200,9 +200,7 @@ export default async function AdminPollDetailPage({
         status: poll.status,
         sealedResult: poll.sealedResult ? {
           pdfPath: poll.sealedResult.pdfPath,
-          sha256: poll.sealedResult.sha256,
-          driveFileId: poll.sealedResult.driveFileId,
-          driveWebViewLink: poll.sealedResult.driveWebViewLink
+          sha256: poll.sealedResult.sha256
         } : null,
         protocolEmailLogs: poll.protocolEmailLogs.map(l => ({
           id: l.id,

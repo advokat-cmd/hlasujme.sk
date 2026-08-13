@@ -32,6 +32,14 @@ function requiredText(value: unknown, label: string): string {
   return value.trim();
 }
 
+export function validateLoginInput(value: unknown): { email: string; password: string } {
+  const input = record(value, "Neplatné prihlasovacie údaje.");
+  const email = requiredText(input.email, "E-mail").toLowerCase();
+  const password = requiredText(input.password, "Heslo");
+  if (email.length > 320 || password.length > 4096) throw new Error("Neplatné prihlasovacie údaje.");
+  return { email, password };
+}
+
 export function parseVoteAnswers(value: unknown, questionNos: Set<number>): Record<number, ValidVoteAnswer> {
   const input = record(value, "Chybné údaje odpovedí.");
   const normalized: Record<number, ValidVoteAnswer> = {};

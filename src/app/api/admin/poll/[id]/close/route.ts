@@ -6,7 +6,6 @@ import { generateSealedProtocol } from "@/lib/pdf";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import fs from "fs";
 import path from "path";
-import { uploadFileToDrive } from "@/lib/gdrive";
 import { acquirePollLock } from "@/lib/pollLock";
 import { canonicalJson, sha256Hex } from "@/lib/seal";
 import { resolveStoragePath, storageRelativePath } from "@/lib/storage";
@@ -117,28 +116,6 @@ export async function POST(
       );
     }
 
-    // 6. Upload to Google Drive. A failure does not block the close (the PDF
-    // is safely stored locally), but it is tracked and reported to the admin.
-    const driveConfigured = !!(process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY);
-    let driveFile: { id: string; webViewLink: string } | null = null;
-    let driveErrorMessage: string | null = null;
-
-    if (!poll.driveFolderId) {
-      driveErrorMessage = driveConfigured
-        ? "Hlasovanie nemá priradený Google Drive priečinok."
-        : null;
-    } else {
-      try {
-        driveFile = await uploadFileToDrive(poll.driveFolderId, fileName, "application/pdf", pdfBuffer);
-        if (!driveFile && driveConfigured) {
-          driveErrorMessage = "Nahratie zápisnice na Google Drive zlyhalo.";
-        }
-      } catch (driveErr) {
-        console.error("Failed to upload sealed PDF to Google Drive:", driveErr);
-        driveErrorMessage = "Nahratie zápisnice na Google Drive zlyhalo.";
-      }
-    }
-
     // 7. Close the poll and seal the exact snapshot under the poll lock.
     const sealedResult = await db.$transaction(async tx => {
       await acquirePollLock(tx, pollId);
@@ -153,10 +130,7 @@ export async function POST(
           resultSha256,
           sha256,
           pdfPath: relativePdfPath,
-          sealedAt: new Date(),
-          driveFileId: driveFile?.id ?? null,
-          driveWebViewLink: driveFile?.webViewLink ?? null,
-          driveUploadedAt: driveFile ? new Date() : null
+          sealedAt: new Date()
         }
       });
       await tx.poll.update({ where: { id: pollId }, data: { status: PollStatus.closed } });
@@ -172,9 +146,7 @@ export async function POST(
         pollId,
         pollTitle: poll.title,
         sha256,
-        pdfPath: relativePdfPath,
-        driveFileId: driveFile?.id ?? null,
-        driveUploadFailed: !!driveErrorMessage
+        pdfPath: relativePdfPath
       }
     );
 
@@ -183,10 +155,7 @@ export async function POST(
     return NextResponse.json({
       success: true,
       sha256: sealedResult.sha256,
-      resultSha256: sealedResult.resultSha256,
-      driveUploaded: !!driveFile,
-      driveConfigured,
-      driveError: driveErrorMessage
+      resultSha256: sealedResult.resultSha256
     });
   } catch (err) {
     console.error("Close poll API error:", err);

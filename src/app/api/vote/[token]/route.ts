@@ -198,6 +198,7 @@ export async function POST(
           const emailContent = await getConfirmationEmail({
             ownerName: owner?.name || unit.actingPerson || "vlastník",
             unitNo: unit.no,
+            buildingShort: poll.building.short || poll.building.name,
             pollTitle: poll.title,
             dateFormatted,
             answersSummary

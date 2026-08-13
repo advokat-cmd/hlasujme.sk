@@ -1,8 +1,10 @@
 import { db } from "../src/lib/db";
 import { PollStatus, MajorityType } from "@prisma/client";
 import { generateSealedPdf } from "../src/lib/pdf";
+import { assertSafeDestructiveDatabase } from "./check-db-boundary";
 
 async function main() {
+  assertSafeDestructiveDatabase();
   console.log("Testing close poll logic with 1 question...");
   
   // 1. Create a temporary poll with 1 question
