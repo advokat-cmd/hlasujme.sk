@@ -23,11 +23,8 @@ export async function POST(request: Request) {
     let credentials: ReturnType<typeof validateLoginInput>;
     try {
       credentials = validateLoginInput(await request.json());
-    } catch (error) {
-      return NextResponse.json(
-        { error: error instanceof Error ? error.message : "Neplatné prihlasovacie údaje." },
-        { status: 400 },
-      );
+    } catch {
+      return NextResponse.json({ error: "Neplatné prihlasovacie údaje." }, { status: 400 });
     }
     const { email, password } = credentials;
 
