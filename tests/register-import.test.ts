@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { validateRegisterImport } from "../src/lib/maintenance/registerImport";
+import { matchesRegisterBuilding, validateRegisterImport } from "../src/lib/maintenance/registerImport";
 
 const validPayload = {
   buildingEntrance: "3",
@@ -63,4 +63,9 @@ test("register import rejects supplied emails until the later email update", () 
     }),
     /e-mail/i,
   );
+});
+
+test("register import matches the source entrance against the building short name", () => {
+  assert.equal(matchesRegisterBuilding("3", { entrance: "Vchod A", short: "Björnsonova 3", address: "Björnsonova 3, Bratislava" }), true);
+  assert.equal(matchesRegisterBuilding("5", { entrance: "Vchod A", short: "Björnsonova 3", address: "Björnsonova 3, Bratislava" }), false);
 });

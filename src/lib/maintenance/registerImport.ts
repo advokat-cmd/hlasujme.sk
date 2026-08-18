@@ -43,6 +43,19 @@ function text(value: unknown, label: string): string {
   return value.trim();
 }
 
+export function matchesRegisterBuilding(
+  sourceEntrance: string,
+  building: { entrance: string; short: string | null; address: string },
+): boolean {
+  const source = sourceEntrance.trim();
+  if (!source) return false;
+  const escaped = source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const token = new RegExp(`(?:^|\\D)${escaped}(?:\\D|$)`, "u");
+  return [building.entrance, building.short, building.address]
+    .filter((value): value is string => typeof value === "string")
+    .some(value => value.trim() === source || token.test(value));
+}
+
 export function validateRegisterImport(value: unknown): {
   payload: RegisterImportPayload;
   unitCount: number;

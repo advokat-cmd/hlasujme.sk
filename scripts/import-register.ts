@@ -1,6 +1,6 @@
 import { CoMode, OwnerRole, Prisma, UnitType } from "@prisma/client";
 import { db } from "../src/lib/db";
-import { validateRegisterImport } from "../src/lib/maintenance/registerImport";
+import { matchesRegisterBuilding, validateRegisterImport } from "../src/lib/maintenance/registerImport";
 
 const args = process.argv.slice(2);
 if (args.some(arg => arg !== "--apply" && arg !== "--verify") || args.includes("--apply") && args.includes("--verify")) {
@@ -72,7 +72,7 @@ async function verifyImportedRegistry(expectedAdminCount?: number) {
 async function main() {
   const current = await currentRegistry();
   if (!current.building || current.buildingCount !== 1) throw new Error("Očakáva sa práve jeden bytový dom.");
-  if (current.building.entrance.trim() !== imported.payload.buildingEntrance) throw new Error("Import patrí inému vchodu.");
+  if (!matchesRegisterBuilding(imported.payload.buildingEntrance, current.building)) throw new Error("Import patrí inému vchodu.");
   console.log(JSON.stringify({
     phase: "inspected",
     apply,
