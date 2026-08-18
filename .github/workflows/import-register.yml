@@ -1,0 +1,64 @@
+name: Import Register
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Import the validated register into production"
+        required: true
+        type: boolean
+        default: false
+      expected_fingerprint:
+        description: "SHA-256 fingerprint shown by the dry run"
+        required: false
+        type: string
+      confirm:
+        description: "For apply, type IMPORT_TWELVE_UNITS_SEVENTEEN_OWNERS"
+        required: false
+        type: string
+
+jobs:
+  import:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      REGISTER_IMPORT_PAYLOAD_B64: ${{ secrets.REGISTER_IMPORT_PAYLOAD_B64 }}
+    steps:
+      - name: Inspect, back up, and optionally import register
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          envs: REGISTER_IMPORT_PAYLOAD_B64
+          script: |
+            set -euo pipefail
+            test -n "$REGISTER_IMPORT_PAYLOAD_B64"
+            CURRENT_DIR="$(readlink -f /var/www/hlasovanie-current)"
+            cd "$CURRENT_DIR"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+            DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export DATABASE_URL
+            node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing import outside lemon/hlasujme")'
+            npm run maintenance:import-register
+
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              test "${{ inputs.confirm }}" = "IMPORT_TWELVE_UNITS_SEVENTEEN_OWNERS"
+              test -n "${{ inputs.expected_fingerprint }}"
+              PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+              BACKUP_DIR=/var/backups/hlasujme
+              install -d -m 700 "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/before-register-import-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+              chmod 600 "$BACKUP_FILE"
+              test -s "$BACKUP_FILE"
+
+              export EXPECTED_IMPORT_FINGERPRINT="${{ inputs.expected_fingerprint }}"
+              export CONFIRM_REGISTER_IMPORT=IMPORT_TWELVE_UNITS_SEVENTEEN_OWNERS
+              npm run maintenance:import-register -- --apply
+              npm run maintenance:import-register -- --verify
+              echo "Validated register imported; protected backup retained in $BACKUP_FILE"
+            fi

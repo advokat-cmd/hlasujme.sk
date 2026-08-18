@@ -11,6 +11,7 @@
     "test:integration": "tsx --test tests/integration/**/*.test.ts",
     "maintenance:purge-test-data": "tsx scripts/purge-test-data.ts",
     "maintenance:purge-empty-units": "tsx scripts/purge-empty-units.ts",
+    "maintenance:import-register": "tsx scripts/import-register.ts",
     "storage:relocate-legacy": "tsx scripts/relocate-legacy-storage.ts",
     "check": "npm run test && npm run lint && tsc --noEmit --pretty false && next build"
   },
