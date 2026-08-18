@@ -8,6 +8,11 @@ on:
         required: true
         type: boolean
         default: false
+      verify:
+        description: "Verify the existing register against the private payload"
+        required: true
+        type: boolean
+        default: false
       expected_fingerprint:
         description: "SHA-256 fingerprint shown by the dry run"
         required: false
@@ -43,7 +48,12 @@ jobs:
             DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
             export DATABASE_URL
             node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing import outside lemon/hlasujme")'
-            npm run maintenance:import-register
+            if [ "${{ inputs.verify }}" = "true" ]; then
+              test "${{ inputs.apply }}" != "true"
+              npm run maintenance:import-register -- --verify
+            else
+              npm run maintenance:import-register
+            fi
 
             if [ "${{ inputs.apply }}" = "true" ]; then
               test "${{ inputs.confirm }}" = "IMPORT_TWELVE_UNITS_SEVENTEEN_OWNERS"
