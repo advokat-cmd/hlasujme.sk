@@ -1,0 +1,55 @@
+name: Purge Test Archive and Owners
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete closed polls and the two current owners"
+        required: true
+        type: boolean
+        default: false
+      confirm:
+        description: "For apply, type DELETE_CLOSED_POLLS_AND_TWO_OWNERS"
+        required: false
+        type: string
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Inspect targets, back up, and optionally purge
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            CURRENT_DIR="$(readlink -f /var/www/hlasovanie-current)"
+            cd "$CURRENT_DIR"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+            DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export DATABASE_URL
+            node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing purge outside lemon/hlasujme")'
+
+            npm run maintenance:purge-test-data
+
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              test "${{ inputs.confirm }}" = "DELETE_CLOSED_POLLS_AND_TWO_OWNERS"
+              PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+              BACKUP_DIR=/var/backups/hlasujme
+              install -d -m 700 "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/before-test-data-purge-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+              chmod 600 "$BACKUP_FILE"
+              test -s "$BACKUP_FILE"
+
+              export CONFIRM_TEST_DATA_PURGE=DELETE_CLOSED_POLLS_AND_TWO_OWNERS
+              npm run maintenance:purge-test-data -- --apply
+              npm run maintenance:purge-test-data
+              echo "Requested Hlasujme test data removed; protected backup retained in $BACKUP_FILE"
+            fi

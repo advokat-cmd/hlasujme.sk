@@ -27,3 +27,14 @@ test("deployment builds in an isolated release before switching the live symlink
   assert.match(workflow, /git worktree add --detach/);
   assert.ok(build >= 0 && switchLive > build, "live release must switch only after a successful build");
 });
+
+test("production test-data purge is scoped, backed up, and explicitly confirmed", () => {
+  const workflow = readFileSync(".github/workflows/purge-test-data.yml", "utf8");
+  const script = readFileSync("scripts/purge-test-data.ts", "utf8");
+  assert.match(workflow, /pg_dump[\s\S]*--schema=hlasujme/);
+  assert.match(workflow, /DELETE_CLOSED_POLLS_AND_TWO_OWNERS/);
+  assert.match(script, /pathname\.replace[\s\S]*"lemon"[\s\S]*"hlasujme"/);
+  assert.match(script, /summary\.owners !== 2/);
+  assert.match(script, /protectedOwnerAccounts !== 0/);
+  assert.match(script, /status: PollStatus\.closed/);
+});

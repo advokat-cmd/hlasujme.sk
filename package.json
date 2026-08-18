@@ -9,6 +9,7 @@
     "lint": "eslint",
     "test": "tsx --test tests/**/*.test.ts",
     "test:integration": "tsx --test tests/integration/**/*.test.ts",
+    "maintenance:purge-test-data": "tsx scripts/purge-test-data.ts",
     "storage:relocate-legacy": "tsx scripts/relocate-legacy-storage.ts",
     "check": "npm run test && npm run lint && tsc --noEmit --pretty false && next build"
   },
