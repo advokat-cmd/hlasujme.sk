@@ -35,6 +35,7 @@ test("production test-data purge is scoped, backed up, and explicitly confirmed"
   assert.match(workflow, /DELETE_CLOSED_POLLS_AND_TWO_OWNERS/);
   assert.match(script, /pathname\.replace[\s\S]*"lemon"[\s\S]*"hlasujme"/);
   assert.match(script, /summary\.owners !== 2/);
-  assert.match(script, /protectedOwnerAccounts !== 0/);
+  assert.match(script, /ownerId: \{ not: null \}, role: "vlastnik"/);
+  assert.match(script, /Privileged accounts are preserved/);
   assert.match(script, /status: PollStatus\.closed/);
 });

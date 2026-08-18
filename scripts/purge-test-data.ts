@@ -27,9 +27,6 @@ async function summarize(client: Client) {
 
 function assertExpectedTargets(summary: Awaited<ReturnType<typeof summarize>>) {
   if (summary.owners !== 2) throw new Error(`Očakávali sa presne 2 vlastníci, nájdených je ${summary.owners}.`);
-  if (summary.protectedOwnerAccounts !== 0) {
-    throw new Error("Mazanie zastavené: na vlastníka je naviazaný administrátor alebo superadministrátor.");
-  }
 }
 
 async function main() {
@@ -45,6 +42,8 @@ async function main() {
     const current = await summarize(tx);
     assertExpectedTargets(current);
 
+    // Delete only ordinary owner login accounts. Privileged accounts are preserved;
+    // the Owner foreign key uses ON DELETE SET NULL and is safely detached below.
     const ownerAccounts = await tx.admin.deleteMany({
       where: { ownerId: { not: null }, role: "vlastnik" },
     });
