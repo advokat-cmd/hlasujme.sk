@@ -1,0 +1,60 @@
+name: Purge Empty Units
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Delete all current units after inspection"
+        required: true
+        type: boolean
+        default: false
+      expected_units:
+        description: "Exact inspected unit count required for apply"
+        required: false
+        type: string
+      confirm:
+        description: "For apply, type DELETE_ALL_CURRENT_UNITS"
+        required: false
+        type: string
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Inspect, back up, and optionally purge empty units
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          script: |
+            set -euo pipefail
+            CURRENT_DIR="$(readlink -f /var/www/hlasovanie-current)"
+            cd "$CURRENT_DIR"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+            DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export DATABASE_URL
+            node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing unit purge outside lemon/hlasujme")'
+            npm run maintenance:purge-empty-units
+
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              test "${{ inputs.confirm }}" = "DELETE_ALL_CURRENT_UNITS"
+              test -n "${{ inputs.expected_units }}"
+              PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+              BACKUP_DIR=/var/backups/hlasujme
+              install -d -m 700 "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/before-empty-unit-purge-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+              chmod 600 "$BACKUP_FILE"
+              test -s "$BACKUP_FILE"
+
+              export EXPECTED_UNIT_COUNT="${{ inputs.expected_units }}"
+              export CONFIRM_UNIT_PURGE=DELETE_ALL_CURRENT_UNITS
+              npm run maintenance:purge-empty-units -- --apply
+              npm run maintenance:purge-empty-units
+              echo "Requested Hlasujme units removed; protected backup retained in $BACKUP_FILE"
+            fi

@@ -39,3 +39,15 @@ test("production test-data purge is scoped, backed up, and explicitly confirmed"
   assert.match(script, /Privileged accounts are preserved/);
   assert.match(script, /status: PollStatus\.closed/);
 });
+
+test("production unit purge preserves accounts and requires an empty owner registry", () => {
+  const workflow = readFileSync(".github/workflows/purge-empty-units.yml", "utf8");
+  const script = readFileSync("scripts/purge-empty-units.ts", "utf8");
+  assert.match(workflow, /pg_dump[\s\S]*--schema=hlasujme/);
+  assert.match(workflow, /DELETE_ALL_CURRENT_UNITS/);
+  assert.match(script, /pathname\.replace[\s\S]*"lemon"[\s\S]*"hlasujme"/);
+  assert.match(script, /summary\.owners !== 0/);
+  assert.match(script, /admin\.count/);
+  assert.match(script, /unit\.deleteMany/);
+  assert.match(script, /adminCount !== before\.adminCount/);
+});
