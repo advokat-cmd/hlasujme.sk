@@ -56,6 +56,20 @@ export function matchesRegisterBuilding(
     .some(value => value.trim() === source || token.test(value));
 }
 
+export function verifyStoredRegisterImport(
+  expected: ReturnType<typeof validateRegisterImport>,
+  building: { entrance: string; short: string | null; address: string },
+  storedUnits: unknown[],
+): ReturnType<typeof validateRegisterImport> {
+  if (!matchesRegisterBuilding(expected.payload.buildingEntrance, building)) throw new Error("Import patrí inému vchodu.");
+  const actual = validateRegisterImport({
+    buildingEntrance: expected.payload.buildingEntrance,
+    units: storedUnits,
+  });
+  if (actual.fingerprint !== expected.fingerprint) throw new Error("Importované údaje sa nezhodujú so zdrojom.");
+  return actual;
+}
+
 export function validateRegisterImport(value: unknown): {
   payload: RegisterImportPayload;
   unitCount: number;

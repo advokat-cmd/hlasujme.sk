@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { matchesRegisterBuilding, validateRegisterImport } from "../src/lib/maintenance/registerImport";
+import { matchesRegisterBuilding, validateRegisterImport, verifyStoredRegisterImport } from "../src/lib/maintenance/registerImport";
 
 const validPayload = {
   buildingEntrance: "3",
@@ -68,4 +68,14 @@ test("register import rejects supplied emails until the later email update", () 
 test("register import matches the source entrance against the building short name", () => {
   assert.equal(matchesRegisterBuilding("3", { entrance: "Vchod A", short: "Björnsonova 3", address: "Björnsonova 3, Bratislava" }), true);
   assert.equal(matchesRegisterBuilding("5", { entrance: "Vchod A", short: "Björnsonova 3", address: "Björnsonova 3, Bratislava" }), false);
+});
+
+test("stored register verification retains the source entrance in its fingerprint", () => {
+  const expected = validateRegisterImport(validPayload);
+  const verified = verifyStoredRegisterImport(
+    expected,
+    { entrance: "Vchod A", short: "Björnsonova 3", address: "Björnsonova 3, Bratislava" },
+    expected.payload.units,
+  );
+  assert.equal(verified.fingerprint, expected.fingerprint);
 });

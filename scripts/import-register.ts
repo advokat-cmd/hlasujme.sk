@@ -1,6 +1,6 @@
 import { CoMode, OwnerRole, Prisma, UnitType } from "@prisma/client";
 import { db } from "../src/lib/db";
-import { matchesRegisterBuilding, validateRegisterImport } from "../src/lib/maintenance/registerImport";
+import { matchesRegisterBuilding, validateRegisterImport, verifyStoredRegisterImport } from "../src/lib/maintenance/registerImport";
 
 const args = process.argv.slice(2);
 if (args.some(arg => arg !== "--apply" && arg !== "--verify") || args.includes("--apply") && args.includes("--verify")) {
@@ -43,9 +43,7 @@ async function currentRegistry() {
 async function verifyImportedRegistry(expectedAdminCount?: number) {
   const current = await currentRegistry();
   if (!current.building || current.buildingCount !== 1) throw new Error("Očakáva sa práve jeden bytový dom.");
-  const actual = validateRegisterImport({
-    buildingEntrance: current.building.entrance,
-    units: current.building.units.map(unit => ({
+  const actual = verifyStoredRegisterImport(imported, current.building, current.building.units.map(unit => ({
       no: unit.no,
       type: unit.type,
       floor: unit.floor,
@@ -60,9 +58,7 @@ async function verifyImportedRegistry(expectedAdminCount?: number) {
         role: owner.role,
         email: owner.email,
       })),
-    })),
-  });
-  if (actual.fingerprint !== imported.fingerprint) throw new Error("Importované údaje sa nezhodujú so zdrojom.");
+    })));
   if (expectedAdminCount !== undefined && current.adminCount !== expectedAdminCount) {
     throw new Error("Počet administrátorských účtov sa počas importu zmenil.");
   }
