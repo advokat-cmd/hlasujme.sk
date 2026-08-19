@@ -1,0 +1,74 @@
+name: Assign Register Emails
+
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "Assign the validated emails in production"
+        required: true
+        type: boolean
+        default: false
+      verify:
+        description: "Verify existing assignments against the private payload"
+        required: true
+        type: boolean
+        default: false
+      expected_fingerprint:
+        description: "SHA-256 fingerprint shown by the dry run"
+        required: false
+        type: string
+      confirm:
+        description: "For apply, type ASSIGN_TEN_VERIFIED_EMAILS"
+        required: false
+        type: string
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      EMAIL_ASSIGNMENT_PAYLOAD_B64: ${{ secrets.EMAIL_ASSIGNMENT_PAYLOAD_B64 }}
+    steps:
+      - name: Inspect, back up, and optionally assign emails
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          command_timeout: 10m
+          envs: EMAIL_ASSIGNMENT_PAYLOAD_B64
+          script: |
+            set -euo pipefail
+            test -n "$EMAIL_ASSIGNMENT_PAYLOAD_B64"
+            CURRENT_DIR="$(readlink -f /var/www/hlasovanie-current)"
+            cd "$CURRENT_DIR"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+            DATABASE_URL="$(node -r dotenv/config -e 'process.stdout.write(process.env.DATABASE_URL || "")')"
+            export DATABASE_URL
+            node -e 'const u=new URL(process.env.DATABASE_URL);if(u.pathname.replace(/^\//,"")!=="lemon"||u.searchParams.get("schema")!=="hlasujme")throw new Error("Refusing assignment outside lemon/hlasujme")'
+            if [ "${{ inputs.verify }}" = "true" ]; then
+              test "${{ inputs.apply }}" != "true"
+              npm run maintenance:assign-register-emails -- --verify
+            else
+              npm run maintenance:assign-register-emails
+            fi
+
+            if [ "${{ inputs.apply }}" = "true" ]; then
+              test "${{ inputs.confirm }}" = "ASSIGN_TEN_VERIFIED_EMAILS"
+              test -n "${{ inputs.expected_fingerprint }}"
+              PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
+              BACKUP_DIR=/var/backups/hlasujme
+              install -d -m 700 "$BACKUP_DIR"
+              BACKUP_FILE="$BACKUP_DIR/before-email-assignment-$(date -u +%Y%m%dT%H%M%SZ).dump"
+              pg_dump --dbname="$PG_URL" --schema=hlasujme --format=custom --file="$BACKUP_FILE"
+              chmod 600 "$BACKUP_FILE"
+              test -s "$BACKUP_FILE"
+
+              export EXPECTED_EMAIL_FINGERPRINT="${{ inputs.expected_fingerprint }}"
+              export CONFIRM_EMAIL_ASSIGNMENT=ASSIGN_TEN_VERIFIED_EMAILS
+              npm run maintenance:assign-register-emails -- --apply
+              npm run maintenance:assign-register-emails -- --verify
+              echo "Validated emails assigned; protected backup retained in $BACKUP_FILE"
+            fi
