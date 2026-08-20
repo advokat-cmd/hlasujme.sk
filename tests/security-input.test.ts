@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   parseVoteAnswers,
+  validateOptionalEmail,
   validateLoginInput,
   validateNewPassword,
   validateOwners,
@@ -16,6 +17,21 @@ test("login input is normalized and malformed input is rejected", () => {
   });
   assert.throws(() => validateLoginInput(null), /prihlas/i);
   assert.throws(() => validateLoginInput({ email: "", password: "" }), /povinn/i);
+});
+
+test("optional email accepts empty values and normalizes a valid address", () => {
+  assert.equal(validateOptionalEmail(undefined), "");
+  assert.equal(validateOptionalEmail("  "), "");
+  assert.equal(validateOptionalEmail(" USER@Example.COM "), "user@example.com");
+});
+
+test("optional email rejects malformed and oversized addresses", () => {
+  assert.throws(() => validateOptionalEmail("missing-domain@"), /platn/i);
+  assert.throws(() => validateOptionalEmail(`${"a".repeat(310)}@example.com`), /320/);
+  assert.throws(
+    () => validateOwners([{ first: "A", last: "B", share: 1, email: "not-an-email" }], "single"),
+    /platn/i,
+  );
 });
 
 test("vote answers reject unknown questions and enum values", () => {

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { UnitType, CoMode, OwnerRole } from "@prisma/client";
-import { createAuditLogEntry } from "@/lib/hashChain";
+import { createAuditLogEntryWithTx } from "@/lib/hashChain";
 import * as argon2 from "argon2";
-import { validateNewPassword, validateOwners } from "@/lib/security/input";
+import { validateNewPassword, validateOptionalEmail, validateOwners, type NormalizedOwner } from "@/lib/security/input";
 import { assertAccountMutationAllowed } from "@/lib/security/accounts";
+import { synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
 
 export async function POST(request: Request) {
   try {
@@ -32,9 +33,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Číslo jednotky je povinné." }, { status: 400 });
     }
 
-    let owners;
+    let owners: NormalizedOwner[];
+    let unitEmail: string;
     try {
+      unitEmail = validateOptionalEmail(email, "E-mail jednotky");
       owners = validateOwners(body.owners, coMode);
+      const synchronized = synchronizeSingleOwnerEmail(coMode, unitEmail, owners);
+      unitEmail = synchronized.unitEmail;
+      owners = synchronized.owners;
       for (const owner of owners) {
         if (!owner.admin && !owner.password) continue;
         if (!owner.email) throw new Error("Prihlasovací účet vyžaduje e-mail.");
@@ -59,74 +65,66 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Jednotka s číslom ${no} už existuje.` }, { status: 400 });
     }
 
-    // Create unit
-    const unit = await db.unit.create({
-      data: {
-        no: no.trim(),
-        type: type === "nebyt" ? UnitType.nebyt : UnitType.byt,
-        floor: floor.trim(),
-        votes: 1,
-        coMode: coMode as CoMode,
-        email: typeof email === "string" && email.trim() ? email.trim().toLowerCase() : null,
-        buildingId: building.id,
-        owners: {
-          create: owners.map((o) => ({
-            first: o.first,
-            last: o.last,
-            name: `${o.first} ${o.last}`,
-            email: o.email || null,
-            phone: o.phone || null,
-            birthDate: o.birthDate || null,
-            share: o.share,
-            role: o.role as OwnerRole,
-          })),
-        },
-      },
-      include: {
-        owners: true,
-      },
-    });
+    const passwordHashes = await Promise.all(owners.map((owner) =>
+      owner.password
+        ? argon2.hash(validateNewPassword(owner.password), { type: argon2.argon2id })
+        : Promise.resolve(undefined),
+    ));
 
-    // Create admin user if requested
-    for (let i = 0; i < owners.length; i++) {
-      const o = owners[i];
-      const loginEmail = o.email?.trim().toLowerCase();
-      if (loginEmail && (o.admin || o.password)) {
-        const role = o.admin ? "admin" : "vlastnik";
-        const passwordHash = await argon2.hash(validateNewPassword(o.password), { type: argon2.argon2id });
-        const ownerRecord = unit.owners[i];
-        
-        await db.admin.upsert({
-          where: { email: loginEmail },
-          update: {
-            passwordHash,
-            name: ownerRecord.name,
-            role,
-            unitId: unit.id,
-            ownerId: ownerRecord.id,
+    const unit = await db.$transaction(async (tx) => {
+      const createdUnit = await tx.unit.create({
+        data: {
+          no: no.trim(),
+          type: type === "nebyt" ? UnitType.nebyt : UnitType.byt,
+          floor: floor.trim(),
+          votes: 1,
+          coMode: coMode as CoMode,
+          email: unitEmail || null,
+          buildingId: building.id,
+        },
+      });
+
+      const createdOwners = [];
+      for (let index = 0; index < owners.length; index++) {
+        const owner = owners[index];
+        const ownerRecord = await tx.owner.create({
+          data: {
+            unitId: createdUnit.id,
+            first: owner.first,
+            last: owner.last,
+            name: `${owner.first} ${owner.last}`,
+            email: owner.email || null,
+            phone: owner.phone || null,
+            birthDate: owner.birthDate || null,
+            share: owner.share,
+            role: owner.role as OwnerRole,
           },
-          create: {
-            email: loginEmail,
-            passwordHash,
+        });
+        createdOwners.push(ownerRecord);
+        const passwordHash = passwordHashes[index];
+        if (!owner.email || (!owner.admin && !passwordHash)) continue;
+        await tx.admin.create({
+          data: {
+            email: owner.email,
+            passwordHash: passwordHash!,
             name: ownerRecord.name,
-            role,
-            unitId: unit.id,
+            role: owner.admin ? "admin" : "vlastnik",
+            unitId: createdUnit.id,
             ownerId: ownerRecord.id,
           },
         });
       }
-    }
 
-    // Update building unitsCount
-    await db.building.update({
-      where: { id: building.id },
-      data: { unitsCount: { increment: 1 } },
-    });
-
-    await createAuditLogEntry("UNIT_CREATED", `admin:${session.email}`, {
-      message: `Bolo pridaná nová jednotka č. ${no}.`,
-      unitId: unit.id,
-      unitNo: no,
+      await tx.building.update({
+        where: { id: building.id },
+        data: { unitsCount: { increment: 1 } },
+      });
+      await createAuditLogEntryWithTx(tx, "UNIT_CREATED", `admin:${session.email}`, {
+        message: `Bolo pridaná nová jednotka č. ${no}.`,
+        unitId: createdUnit.id,
+        unitNo: no,
+      });
+      return { ...createdUnit, owners: createdOwners };
     });
 
     return NextResponse.json({ success: true, unit });

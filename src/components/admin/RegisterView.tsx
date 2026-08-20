@@ -11,6 +11,7 @@ import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
+import { ownerEmailForDisplay, synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
 
 interface RegisterOwner {
   id: string;
@@ -406,7 +407,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                                 {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
                               </div>
                               <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", display: "flex", flexWrap: "wrap", gap: "4px 8px", alignItems: "center" }}>
-                                <span style={{ wordBreak: "break-all" }}>{o.email || "bez e-mailu"}</span>
+                                <span style={{ wordBreak: "break-all" }}>{ownerEmailForDisplay(u.coMode, u.email, o.email) || "bez e-mailu"}</span>
                                 <span>·</span>
                                 <span>podiel {Math.round(o.share * 100)}%</span>
                                 <span>·</span>
@@ -598,16 +599,38 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   const [no, setNo] = useState(unit?.no || "");
   const [type, setType] = useState(unit?.type || "byt");
   const [floor, setFloor] = useState(unit?.floor || "");
-  const [email, setEmail] = useState(unit?.email || "");
+  const [email, setEmail] = useState(
+    unit?.email || (unit?.coMode === "single" && unit?.owners.length === 1 ? unit.owners[0]?.email || "" : ""),
+  );
   const [coMode, setCoMode] = useState(unit?.coMode || "single");
   const [owners, setOwners] = useState<any[]>(
-    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: initialOwnerId, first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
+    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", email: ownerEmailForDisplay(unit.coMode, unit.email, o.email), phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: initialOwnerId, first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const setOwner = (i: number, k: string, v: any) => {
+    if (k === "email" && coMode === "single" && owners.length === 1 && i === 0) setEmail(v);
     setOwners((os) => os.map((o, idx) => (idx === i ? { ...o, [k]: v } : o)));
+  };
+
+  const setUnitEmail = (value: string) => {
+    setEmail(value);
+    if (coMode === "single" && owners.length === 1) {
+      setOwners((os) => os.map((owner, index) => index === 0 ? { ...owner, email: value } : owner));
+    }
+  };
+
+  const changeCoMode = (value: string) => {
+    setCoMode(value);
+    if (value !== "single" || owners.length !== 1) return;
+    try {
+      const synchronized = synchronizeSingleOwnerEmail(value, email, owners);
+      setEmail(synchronized.unitEmail);
+      setOwners(synchronized.owners);
+    } catch {
+      // Preserve both values so the API can report the conflict instead of silently overwriting either address.
+    }
   };
 
   const addOwner = () => {
@@ -711,7 +734,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
       <FormRow label="Režim hlasovania" hint="Pri spoluvlastníctve určuje, ako sa započíta jeden hlas za jednotku.">
         <select
           value={coMode}
-          onChange={(e) => setCoMode(e.target.value)}
+          onChange={(e) => changeCoMode(e.target.value)}
           style={{
             width: "100%",
             boxSizing: "border-box",
@@ -733,7 +756,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
       </FormRow>
 
       <FormRow label="E-mail na hlasovanie (jednotka)" hint="Naň sa odošle osobný hlasovací link.">
-        <Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="napr. vlastnik@email.sk" />
+        <Input value={email} onChange={(e) => setUnitEmail(e.target.value)} placeholder="napr. vlastnik@email.sk" />
       </FormRow>
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "8px 0 10px" }}>

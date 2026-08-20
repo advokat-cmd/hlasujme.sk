@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { compareUnitNumbers } from "@/lib/unitNumberSort";
+import { accountUsesAdminControls } from "@/lib/security/accounts";
 import { RegisterView } from "@/components/admin/RegisterView";
 
 export const revalidate = 0; // Prevent server caching
@@ -63,7 +64,7 @@ export default async function AdminRegisterPage() {
       birthDate: o.birthDate,
       share: o.share,
       role: o.role,
-      admin: o.admins.length > 0
+      admin: accountUsesAdminControls(o.admins)
     }))
   })).sort((a, b) => compareUnitNumbers(a.no, b.no));
 

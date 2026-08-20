@@ -32,6 +32,16 @@ function requiredText(value: unknown, label: string): string {
   return value.trim();
 }
 
+export function validateOptionalEmail(value: unknown, label = "E-mail"): string {
+  if (value === undefined || value === null) return "";
+  if (typeof value !== "string") throw new Error(`${label} nie je platný.`);
+  const email = value.trim().toLowerCase();
+  if (!email) return "";
+  if (email.length > 320) throw new Error(`${label} môže mať najviac 320 znakov.`);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error(`${label} nie je platný.`);
+  return email;
+}
+
 export function validateLoginInput(value: unknown): { email: string; password: string } {
   const input = record(value, "Neplatné prihlasovacie údaje.");
   const email = requiredText(input.email, "E-mail").toLowerCase();
@@ -80,7 +90,7 @@ export function validateOwners(value: unknown, coModeValue: unknown): Normalized
       id: typeof owner.id === "string" && owner.id ? owner.id : undefined,
       first: requiredText(owner.first, `Meno vlastníka ${index + 1}`),
       last: requiredText(owner.last, `Priezvisko vlastníka ${index + 1}`),
-      email: typeof owner.email === "string" ? owner.email.trim().toLowerCase() : "",
+      email: validateOptionalEmail(owner.email, `E-mail vlastníka ${index + 1}`),
       phone: typeof owner.phone === "string" ? owner.phone.trim() : "",
       birthDate: typeof owner.birthDate === "string" ? owner.birthDate.trim() : "",
       share,
