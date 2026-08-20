@@ -33,6 +33,28 @@ export function ownerEmailForDisplay(
 ): string {
   const displayedOwnerEmail = ownerEmail?.trim();
   if (displayedOwnerEmail) return displayedOwnerEmail;
+  return coMode === "single" || coMode === "bsm" ? unitEmail?.trim() || "" : "";
+}
+
+export function ownerEmailLabelForDisplay(
+  coMode: unknown,
+  unitEmail: string | null | undefined,
+  ownerEmail: string | null | undefined,
+): string {
+  const displayedEmail = ownerEmailForDisplay(coMode, unitEmail, ownerEmail);
+  if (!displayedEmail) return "bez e-mailu";
+  return coMode === "bsm" && !ownerEmail?.trim()
+    ? `spoločný e-mail: ${displayedEmail}`
+    : displayedEmail;
+}
+
+export function ownerEmailForEditing(
+  coMode: unknown,
+  unitEmail: string | null | undefined,
+  ownerEmail: string | null | undefined,
+): string {
+  const editableOwnerEmail = ownerEmail?.trim();
+  if (editableOwnerEmail) return editableOwnerEmail;
   return coMode === "single" ? unitEmail?.trim() || "" : "";
 }
 

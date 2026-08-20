@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   didLoginEmailChange,
+  ownerEmailLabelForDisplay,
   ownerEmailForDisplay,
+  ownerEmailForEditing,
   synchronizeSingleOwnerEmail,
 } from "../src/lib/unitEmails";
 
@@ -57,6 +59,24 @@ test("single-owner detail falls back to the unit email for legacy rows", () => {
   assert.equal(ownerEmailForDisplay("single", "unit@example.com", null), "unit@example.com");
   assert.equal(ownerEmailForDisplay("internal", "unit@example.com", null), "");
   assert.equal(ownerEmailForDisplay("single", "unit@example.com", "owner@example.com"), "owner@example.com");
+});
+
+test("BSM detail displays the shared unit email for both spouses without personal emails", () => {
+  assert.equal(ownerEmailForDisplay("bsm", "family@example.com", null), "family@example.com");
+  assert.equal(ownerEmailForDisplay("bsm", "family@example.com", ""), "family@example.com");
+});
+
+test("BSM detail labels only a fallback unit email as shared", () => {
+  assert.equal(ownerEmailLabelForDisplay("bsm", "family@example.com", null), "spoločný e-mail: family@example.com");
+  assert.equal(ownerEmailLabelForDisplay("bsm", "family@example.com", "spouse@example.com"), "spouse@example.com");
+  assert.equal(ownerEmailLabelForDisplay("bsm", "", null), "bez e-mailu");
+  assert.equal(ownerEmailLabelForDisplay("single", "owner@example.com", null), "owner@example.com");
+});
+
+test("editing preserves the legacy unit-email fallback only for a single owner", () => {
+  assert.equal(ownerEmailForEditing("single", "unit@example.com", null), "unit@example.com");
+  assert.equal(ownerEmailForEditing("bsm", "family@example.com", null), "");
+  assert.equal(ownerEmailForEditing("bsm", "family@example.com", " spouse@example.com "), "spouse@example.com");
 });
 
 test("login email changes are compared after normalization", () => {

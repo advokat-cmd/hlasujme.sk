@@ -11,7 +11,7 @@ import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
-import { ownerEmailForDisplay, synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
+import { ownerEmailForEditing, ownerEmailLabelForDisplay, synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
 
 interface RegisterOwner {
   id: string;
@@ -407,7 +407,7 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                                 {o.admin && <Pill tone="primary" size="sm" icon="shield">administrátor</Pill>}
                               </div>
                               <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", display: "flex", flexWrap: "wrap", gap: "4px 8px", alignItems: "center" }}>
-                                <span style={{ wordBreak: "break-all" }}>{ownerEmailForDisplay(u.coMode, u.email, o.email) || "bez e-mailu"}</span>
+                                <span style={{ wordBreak: "break-all" }}>{ownerEmailLabelForDisplay(u.coMode, u.email, o.email)}</span>
                                 <span>·</span>
                                 <span>podiel {Math.round(o.share * 100)}%</span>
                                 <span>·</span>
@@ -604,7 +604,7 @@ const UnitForm: React.FC<UnitFormProps> = ({ unitId, unit, onClose, onSaved }) =
   );
   const [coMode, setCoMode] = useState(unit?.coMode || "single");
   const [owners, setOwners] = useState<any[]>(
-    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", email: ownerEmailForDisplay(unit.coMode, unit.email, o.email), phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: initialOwnerId, first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
+    unit ? unit.owners.map((o: any) => ({ ...o, first: o.first || o.name.split(" ")[0], last: o.last || o.name.split(" ")[1] || "", email: ownerEmailForEditing(unit.coMode, unit.email, o.email), phone: o.phone || "", birthDate: o.birthDate || "", password: "" })) : [{ id: initialOwnerId, first: "", last: "", email: "", phone: "", birthDate: "", share: 1, role: "owner", admin: false, password: "" }]
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
