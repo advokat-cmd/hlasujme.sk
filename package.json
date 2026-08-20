@@ -13,6 +13,7 @@
     "maintenance:purge-empty-units": "tsx scripts/purge-empty-units.ts",
     "maintenance:import-register": "tsx scripts/import-register.ts",
     "maintenance:assign-register-emails": "tsx scripts/assign-register-emails.ts",
+    "maintenance:sync-single-owner-emails": "tsx scripts/sync-single-owner-emails.ts",
     "storage:relocate-legacy": "tsx scripts/relocate-legacy-storage.ts",
     "check": "npm run test && npm run lint && tsc --noEmit --pretty false && next build"
   },

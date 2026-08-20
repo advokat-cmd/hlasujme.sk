@@ -62,3 +62,18 @@ test("production email assignment is scoped, backed up, and preserves the comple
   assert.match(script, /current\.pollCount !== 0/);
   assert.match(script, /adminCount !== expectedAdminCount/);
 });
+
+test("single-owner email repair is scoped, backed up, and explicitly confirmed", () => {
+  const workflow = readFileSync(".github/workflows/sync-single-owner-emails.yml", "utf8");
+  const script = readFileSync("scripts/sync-single-owner-emails.ts", "utf8");
+  assert.match(workflow, /pg_dump[\s\S]*--schema=hlasujme/);
+  assert.match(workflow, /SYNC_SINGLE_OWNER_EMAILS/);
+  assert.doesNotMatch(workflow, /test "\$\{\{ inputs\.confirm \}\}"/);
+  assert.match(workflow, /git fetch origin main/);
+  assert.match(script, /pathname\.replace[\s\S]*"lemon"[\s\S]*"hlasujme"/);
+  assert.match(script, /coMode: "single"/);
+  assert.match(script, /admins\.length > 1/);
+  assert.match(script, /emailAdmin[\s\S]*ownerId !== owner\.id/);
+  assert.match(script, /const current = await inspect\(tx\)/);
+  assert.match(script, /after\.adminCount !== before\.adminCount/);
+});
