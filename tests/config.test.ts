@@ -51,3 +51,14 @@ test("production unit purge preserves accounts and requires an empty owner regis
   assert.match(script, /unit\.deleteMany/);
   assert.match(script, /adminCount !== before\.adminCount/);
 });
+
+test("production email assignment is scoped, backed up, and preserves the complete expected state", () => {
+  const workflow = readFileSync(".github/workflows/assign-register-emails.yml", "utf8");
+  const script = readFileSync("scripts/assign-register-emails.ts", "utf8");
+  assert.match(workflow, /pg_dump[\s\S]*--schema=hlasujme/);
+  assert.match(workflow, /ASSIGN_VERIFIED_EMAILS/);
+  assert.match(script, /pathname\.replace[\s\S]*"lemon"[\s\S]*"hlasujme"/);
+  assert.match(script, /ensureExistingEmailsAreCovered/);
+  assert.match(script, /current\.pollCount !== 0/);
+  assert.match(script, /adminCount !== expectedAdminCount/);
+});

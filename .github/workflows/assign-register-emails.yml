@@ -18,7 +18,7 @@ on:
         required: false
         type: string
       confirm:
-        description: "For apply, type ASSIGN_TEN_VERIFIED_EMAILS"
+        description: "For apply, type ASSIGN_VERIFIED_EMAILS"
         required: false
         type: string
 
@@ -56,7 +56,7 @@ jobs:
             fi
 
             if [ "${{ inputs.apply }}" = "true" ]; then
-              test "${{ inputs.confirm }}" = "ASSIGN_TEN_VERIFIED_EMAILS"
+              test "${{ inputs.confirm }}" = "ASSIGN_VERIFIED_EMAILS"
               test -n "${{ inputs.expected_fingerprint }}"
               PG_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL);u.searchParams.delete("schema");process.stdout.write(u.toString())')"
               BACKUP_DIR=/var/backups/hlasujme
@@ -67,7 +67,7 @@ jobs:
               test -s "$BACKUP_FILE"
 
               export EXPECTED_EMAIL_FINGERPRINT="${{ inputs.expected_fingerprint }}"
-              export CONFIRM_EMAIL_ASSIGNMENT=ASSIGN_TEN_VERIFIED_EMAILS
+              export CONFIRM_EMAIL_ASSIGNMENT=ASSIGN_VERIFIED_EMAILS
               npm run maintenance:assign-register-emails -- --apply
               npm run maintenance:assign-register-emails -- --verify
               echo "Validated emails assigned; protected backup retained in $BACKUP_FILE"

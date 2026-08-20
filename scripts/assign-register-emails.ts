@@ -72,9 +72,25 @@ function plannedUpdates(current: Awaited<ReturnType<typeof currentRegistry>>) {
   return updates;
 }
 
+function ensureExistingEmailsAreCovered(
+  current: Awaited<ReturnType<typeof currentRegistry>>,
+  updates: ReturnType<typeof plannedUpdates>,
+) {
+  const unitTargets = new Set(updates.filter(update => update.writesUnit).map(update => update.unit.id));
+  const ownerTargets = new Set(updates.flatMap(update => update.owner ? [update.owner.id] : []));
+  const hasUnexpectedUnitEmail = current.building!.units.some(unit => unit.email && !unitTargets.has(unit.id));
+  const hasUnexpectedOwnerEmail = current.building!.units.some(unit =>
+    unit.owners.some(owner => owner.email && !ownerTargets.has(owner.id)),
+  );
+  if (hasUnexpectedUnitEmail || hasUnexpectedOwnerEmail) {
+    throw new Error("Súkromný payload nepokrýva všetky existujúce e-mailové priradenia.");
+  }
+}
+
 async function verifyAssignments(expectedAdminCount?: number) {
   const current = await currentRegistry();
   const updates = plannedUpdates(current);
+  ensureExistingEmailsAreCovered(current, updates);
   for (const update of updates) {
     if (update.writesUnit && update.unit.email?.toLowerCase() !== update.assignment.email) {
       throw new Error(`E-mail bytu ${update.assignment.unitNo} nebol uložený.`);
@@ -108,6 +124,7 @@ async function verifyAssignments(expectedAdminCount?: number) {
 async function main() {
   const current = await currentRegistry();
   const updates = plannedUpdates(current);
+  ensureExistingEmailsAreCovered(current, updates);
   const existingUnitEmailCount = current.building!.units.filter(unit => unit.email).length;
   const existingOwnerEmailCount = current.building!.units.reduce(
     (count, unit) => count + unit.owners.filter(owner => owner.email).length,
@@ -128,14 +145,10 @@ async function main() {
     return;
   }
   if (!apply) return;
-  if (process.env.CONFIRM_EMAIL_ASSIGNMENT !== "ASSIGN_TEN_VERIFIED_EMAILS") {
+  if (process.env.CONFIRM_EMAIL_ASSIGNMENT !== "ASSIGN_VERIFIED_EMAILS") {
     throw new Error("Chýba presné potvrdenie produkčného priradenia.");
   }
-  if (imported.assignmentCount !== 10) throw new Error("Import nemá očakávaných 10 priradení.");
   if (current.pollCount !== 0) throw new Error("E-maily sa nesmú hromadne meniť po vytvorení hlasovania.");
-  if (existingUnitEmailCount !== 0 || existingOwnerEmailCount !== 0) {
-    throw new Error("Pred prvým priradením musia byť e-mailové polia registra prázdne.");
-  }
 
   await db.$transaction(async tx => {
     for (const update of updates) {
