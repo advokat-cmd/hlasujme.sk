@@ -30,16 +30,59 @@ jobs:
             SOURCE_DIR=/var/www/hlasovanie
             RELEASES_DIR=/var/www/hlasovanie-releases
             CURRENT_LINK=/var/www/hlasovanie-current
+            RELEASE_DIR=""
+            PREVIOUS_TARGET=""
+            SWITCHED=false
+            cleanup_failed_release() {
+              status=$?
+              trap - EXIT
+              if [ "$status" -ne 0 ]; then
+                set +e
+                if [ "$SWITCHED" = "true" ] && [ -n "$PREVIOUS_TARGET" ] && [ -d "$PREVIOUS_TARGET" ]; then
+                  rm -f -- "$CURRENT_LINK.rollback"
+                  ln -s "$PREVIOUS_TARGET" "$CURRENT_LINK.rollback"
+                  mv -Tf "$CURRENT_LINK.rollback" "$CURRENT_LINK"
+                  systemctl restart hlasovanie
+                  SWITCHED=false
+                fi
+                live_target="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+                if [ -n "$live_target" ] && [ -n "$RELEASE_DIR" ] && [ -d "$RELEASE_DIR" ] && [ "$live_target" != "$RELEASE_DIR" ]; then
+                  case "$RELEASE_DIR" in
+                    "$RELEASES_DIR"/*) ;;
+                    *) echo "Refusing failed-release cleanup outside $RELEASES_DIR"; exit "$status" ;;
+                  esac
+                  cd "$SOURCE_DIR"
+                  git -c safe.directory="$SOURCE_DIR" worktree remove --force "$RELEASE_DIR" 2>/dev/null || rm -rf -- "$RELEASE_DIR"
+                  git -c safe.directory="$SOURCE_DIR" worktree prune
+                fi
+              fi
+              exit "$status"
+            }
+            trap cleanup_failed_release EXIT
             cd "$SOURCE_DIR"
-            git config --global --add safe.directory "$SOURCE_DIR"
-            git fetch origin main
-            git checkout main
-            git reset --hard origin/main
-            RELEASE_SHA="$(git rev-parse origin/main)"
-            RELEASE_DIR="$RELEASES_DIR/$RELEASE_SHA-$(date -u +%Y%m%dT%H%M%SZ)"
             install -d -m 755 "$RELEASES_DIR"
-            git worktree prune
-            git worktree add --detach "$RELEASE_DIR" "$RELEASE_SHA"
+            CURRENT_TARGET="$(readlink -f "$CURRENT_LINK")"
+            test -n "$CURRENT_TARGET"
+            test -d "$CURRENT_TARGET"
+            PREVIOUS_TARGET="$CURRENT_TARGET"
+            find "$RELEASES_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | while IFS= read -r -d '' candidate; do
+              resolved="$(readlink -f "$candidate" 2>/dev/null || true)"
+              [ -n "$resolved" ] || continue
+              case "$resolved" in
+                "$RELEASES_DIR"/*) ;;
+                *) echo "Refusing release cleanup outside $RELEASES_DIR"; exit 1 ;;
+              esac
+              if [ "$resolved" != "$CURRENT_TARGET" ]; then
+                git -c safe.directory="$SOURCE_DIR" worktree remove --force "$resolved" 2>/dev/null || rm -rf -- "$resolved"
+              fi
+            done
+            git -c safe.directory="$SOURCE_DIR" worktree prune
+            git -c safe.directory="$SOURCE_DIR" fetch origin main
+            git -c safe.directory="$SOURCE_DIR" checkout main
+            git -c safe.directory="$SOURCE_DIR" reset --hard origin/main
+            RELEASE_SHA="$(git -c safe.directory="$SOURCE_DIR" rev-parse origin/main)"
+            RELEASE_DIR="$RELEASES_DIR/$RELEASE_SHA-$(date -u +%Y%m%dT%H%M%SZ)"
+            git -c safe.directory="$SOURCE_DIR" worktree add --detach "$RELEASE_DIR" "$RELEASE_SHA"
             install -m 600 "$SOURCE_DIR/.env" "$RELEASE_DIR/.env"
             cd "$RELEASE_DIR"
 
@@ -70,8 +113,12 @@ jobs:
             npm run build
 
             PREVIOUS_TARGET="$(readlink -f "$CURRENT_LINK" 2>/dev/null || true)"
+            test -n "$PREVIOUS_TARGET"
+            test -d "$PREVIOUS_TARGET"
+            rm -f -- "$CURRENT_LINK.new"
             ln -s "$RELEASE_DIR" "$CURRENT_LINK.new"
             mv -Tf "$CURRENT_LINK.new" "$CURRENT_LINK"
+            SWITCHED=true
             install -d -m 755 /etc/systemd/system/hlasovanie.service.d
             printf '%s\n' '[Service]' 'WorkingDirectory=/var/www/hlasovanie-current' > /etc/systemd/system/hlasovanie.service.d/release.conf
             systemctl daemon-reload
@@ -83,11 +130,6 @@ jobs:
               fi
               if [ "$attempt" = "30" ]; then
                 echo "Production health check failed after 30 attempts"
-                if [ -n "$PREVIOUS_TARGET" ] && [ -d "$PREVIOUS_TARGET" ]; then
-                  ln -s "$PREVIOUS_TARGET" "$CURRENT_LINK.rollback"
-                  mv -Tf "$CURRENT_LINK.rollback" "$CURRENT_LINK"
-                  systemctl restart hlasovanie
-                fi
                 exit 1
               fi
               sleep 1

@@ -22,9 +22,18 @@ test("production build does not depend on downloading Google fonts", () => {
 
 test("deployment builds in an isolated release before switching the live symlink", () => {
   const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
+  const cleanInactive = workflow.indexOf('find "$RELEASES_DIR"');
+  const fetch = workflow.indexOf('fetch origin main');
   const build = workflow.indexOf("npm run build");
   const switchLive = workflow.indexOf('mv -Tf "$CURRENT_LINK.new" "$CURRENT_LINK"');
-  assert.match(workflow, /git worktree add --detach/);
+  assert.match(workflow, /git[^\n]*worktree add --detach/);
+  assert.match(workflow, /CURRENT_TARGET[\s\S]*resolved[\s\S]*"\$resolved" != "\$CURRENT_TARGET"/);
+  assert.match(workflow, /CURRENT_TARGET="\$\(readlink -f "\$CURRENT_LINK"\)"[\s\S]*test -n "\$CURRENT_TARGET"[\s\S]*test -d "\$CURRENT_TARGET"/);
+  assert.match(workflow, /live_target[\s\S]*-n "\$live_target"[\s\S]*git -c safe\.directory/);
+  assert.doesNotMatch(workflow, /git config --global/);
+  assert.match(workflow, /case "\$resolved"[\s\S]*"\$RELEASES_DIR"\/\*/);
+  assert.match(workflow, /cleanup_failed_release[\s\S]*SWITCHED[\s\S]*CURRENT_LINK\.rollback[\s\S]*git[^\n]*worktree remove --force/);
+  assert.ok(cleanInactive >= 0 && cleanInactive < fetch, "inactive releases must be removed before fetch can need free disk space");
   assert.ok(build >= 0 && switchLive > build, "live release must switch only after a successful build");
 });
 
