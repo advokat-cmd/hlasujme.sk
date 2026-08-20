@@ -11,7 +11,7 @@ import { TableScroll, useNarrow } from "../ui/LayoutHelpers";
 import { PageHead } from "./PageHead";
 import { Modal } from "../ui/Modal";
 import { FormRow, Input } from "../ui/FormControls";
-import { ownerEmailForEditing, ownerEmailLabelForDisplay, synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
+import { ownerEmailForEditing, ownerEmailLabelForDisplay, synchronizeSingleOwnerEmail, unitOwnerSummaries } from "@/lib/unitEmails";
 
 interface RegisterOwner {
   id: string;
@@ -205,14 +205,14 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
             
             {list.map((u) => {
               const open = openId === u.id;
-              const noEmail = !u.email && u.coMode !== "internal";
+              const ownerSummaries = unitOwnerSummaries(u.coMode, u.email, u.owners);
               return (
                 <div key={u.id} style={{ borderBottom: "1px solid var(--line)" }}>
                   <div
                     role="button"
                     tabIndex={0}
                     aria-expanded={open}
-                    aria-label={`Byt č. ${u.no} — ${u.owners[0]?.name || "Vlastník"}, ${open ? "zbaliť" : "rozbaliť"} detail`}
+                    aria-label={`Byt č. ${u.no} — ${ownerSummaries.map((owner) => owner.name).join(", ") || "Vlastník"}, ${open ? "zbaliť" : "rozbaliť"} detail`}
                     onClick={() => setOpenId(open ? null : u.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
@@ -256,35 +256,28 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                             }}
                           />
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>{u.owners[0]?.name || "Vlastník"}</span>
-                          {u.owners.length > 1 && <Pill tone="neutral" size="sm">+{u.owners.length - 1}</Pill>}
+                        <div style={{ display: "grid", gap: 6 }}>
+                          {ownerSummaries.map((owner, index) => (
+                            <div key={u.owners[index]?.id || index} style={{ display: "grid", gap: 2 }}>
+                              <span style={{ fontWeight: 600 }}>{owner.name}</span>
+                              {!open && (
+                                <span
+                                  style={{
+                                    color: owner.emailLabel === "bez e-mailu" ? "var(--disagree)" : "var(--ink-soft)",
+                                    fontSize: "12.5px",
+                                    overflowWrap: "anywhere",
+                                  }}
+                                >
+                                  {owner.emailLabel}
+                                </span>
+                              )}
+                            </div>
+                          ))}
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                           <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
                             {CO_MODE_LABEL[u.coMode]}
                           </Pill>
-                          {!open && (
-                            <span
-                              style={{
-                                fontSize: "12.5px",
-                                color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 5,
-                              }}
-                            >
-                              {noEmail ? (
-                                <>
-                                  <Ic name="alert" size={13} /> chýba e-mail
-                                </>
-                              ) : (
-                                <span style={{ textOverflow: "ellipsis", overflow: "hidden", whiteSpace: "nowrap", maxWidth: 200 }}>
-                                  {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
-                                </span>
-                              )}
-                            </span>
-                          )}
                         </div>
                       </>
                     ) : (
@@ -293,34 +286,56 @@ export const RegisterView: React.FC<RegisterViewProps> = ({
                           {u.no}
                           {u.type === "nebyt" && <div style={{ fontSize: 10, fontWeight: 600, color: "var(--accent-ink)" }}>NP</div>}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <span style={{ fontWeight: 600 }}>{u.owners[0]?.name || "Vlastník"}</span>
-                          {u.owners.length > 1 && <Pill tone="neutral" size="sm">+{u.owners.length - 1}</Pill>}
-                        </div>
-                        <div>
-                          <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
-                            {CO_MODE_LABEL[u.coMode]}
-                          </Pill>
-                        </div>
                         <div
                           style={{
-                            fontSize: "12.5px",
-                            color: noEmail ? "var(--disagree)" : "var(--ink-soft)",
-                            display: "flex",
+                            gridColumn: "2 / 5",
+                            display: "grid",
+                            gridTemplateColumns: "minmax(0, 1fr) 200px minmax(0, 150px)",
                             alignItems: "center",
-                            gap: 5,
-                            visibility: open ? "hidden" : "visible",
+                            rowGap: 4,
                           }}
                         >
-                          {noEmail ? (
-                            <>
-                              <Ic name="alert" size={13} /> chýba
-                            </>
-                          ) : (
-                            <span style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                              {u.email || u.owners.map(o => o.email).filter(Boolean).join(", ")}
-                            </span>
-                          )}
+                          {ownerSummaries.map((owner, index) => (
+                            <React.Fragment key={u.owners[index]?.id || index}>
+                              <span
+                                style={{
+                                  gridColumn: 1,
+                                  gridRow: index + 1,
+                                  fontWeight: 600,
+                                  minHeight: 20,
+                                }}
+                              >
+                                {owner.name}
+                              </span>
+                              <span
+                                title={owner.emailLabel}
+                                style={{
+                                  gridColumn: 3,
+                                  gridRow: index + 1,
+                                  color: owner.emailLabel === "bez e-mailu" ? "var(--disagree)" : "var(--ink-soft)",
+                                  fontSize: "12.5px",
+                                  minHeight: 20,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  visibility: open ? "hidden" : "visible",
+                                }}
+                              >
+                                {owner.emailLabel}
+                              </span>
+                            </React.Fragment>
+                          ))}
+                          <div
+                            style={{
+                              gridColumn: 2,
+                              gridRow: `1 / span ${Math.max(ownerSummaries.length, 1)}`,
+                              alignSelf: "center",
+                            }}
+                          >
+                            <Pill tone={u.coMode === "single" ? "neutral" : "primary"} size="sm">
+                              {CO_MODE_LABEL[u.coMode]}
+                            </Pill>
+                          </div>
                         </div>
                         <div>
                           <Ic

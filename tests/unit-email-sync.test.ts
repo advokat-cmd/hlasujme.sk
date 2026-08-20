@@ -6,6 +6,7 @@ import {
   ownerEmailForDisplay,
   ownerEmailForEditing,
   synchronizeSingleOwnerEmail,
+  unitOwnerSummaries,
 } from "../src/lib/unitEmails";
 
 test("single owner copies and normalizes the unit email to its only owner", () => {
@@ -83,4 +84,62 @@ test("login email changes are compared after normalization", () => {
   assert.equal(didLoginEmailChange("Old@Example.com", " old@example.com "), false);
   assert.equal(didLoginEmailChange("old@example.com", "new@example.com"), true);
   assert.equal(didLoginEmailChange("old@example.com", ""), true);
+});
+
+test("register summary keeps every owner aligned with their effective email", () => {
+  assert.deepEqual(
+    unitOwnerSummaries("internal", null, [
+      { name: "Peter Pekar", email: "peter@example.com" },
+      { name: "Mária Pekarová", email: "maria@example.com" },
+    ]),
+    [
+      { name: "Peter Pekar", emailLabel: "peter@example.com" },
+      { name: "Mária Pekarová", emailLabel: "maria@example.com" },
+    ],
+  );
+});
+
+test("register summary labels a shared BSM email for both spouses", () => {
+  assert.deepEqual(
+    unitOwnerSummaries("bsm", "family@example.com", [
+      { name: "Ján Budaj", email: null },
+      { name: "Anna Budajová", email: null },
+    ]),
+    [
+      { name: "Ján Budaj", emailLabel: "spoločný: family@example.com" },
+      { name: "Anna Budajová", emailLabel: "spoločný: family@example.com" },
+    ],
+  );
+});
+
+test("register summary reports a missing email on the corresponding owner", () => {
+  assert.deepEqual(
+    unitOwnerSummaries("internal", null, [
+      { name: "Peter Pekar", email: "peter@example.com" },
+      { name: "Mária Pekarová", email: null },
+    ]),
+    [
+      { name: "Peter Pekar", emailLabel: "peter@example.com" },
+      { name: "Mária Pekarová", emailLabel: "bez e-mailu" },
+    ],
+  );
+});
+
+test("register summary retains the unit email for shared-contact modes", () => {
+  for (const coMode of ["legal", "rep", "majority"]) {
+    assert.deepEqual(
+      unitOwnerSummaries(coMode, "unit@example.com", [{ name: "Kontaktná osoba", email: null }]),
+      [{ name: "Kontaktná osoba", emailLabel: "e-mail jednotky: unit@example.com" }],
+      coMode,
+    );
+  }
+});
+
+test("register summary prefers a personal email over the unit fallback", () => {
+  assert.deepEqual(
+    unitOwnerSummaries("rep", "unit@example.com", [
+      { name: "Určený zástupca", email: "representative@example.com" },
+    ]),
+    [{ name: "Určený zástupca", emailLabel: "representative@example.com" }],
+  );
 });

@@ -48,6 +48,32 @@ export function ownerEmailLabelForDisplay(
     : displayedEmail;
 }
 
+export function unitOwnerSummaries<T extends { name?: string | null; email?: string | null }>(
+  coMode: unknown,
+  unitEmail: string | null | undefined,
+  owners: T[],
+): Array<{ name: string; emailLabel: string }> {
+  return owners.map((owner) => {
+    const personalEmail = owner.email?.trim() || "";
+    const fallbackEmail = unitEmail?.trim() || "";
+    const usesBsmFallback = coMode === "bsm" && !personalEmail && fallbackEmail;
+    const usesUnitFallback = ["legal", "rep", "majority"].includes(String(coMode)) && !personalEmail && fallbackEmail;
+    const displayedEmail = personalEmail
+      || (coMode === "single" || usesBsmFallback || usesUnitFallback ? fallbackEmail : "");
+
+    return {
+      name: owner.name?.trim() || "Vlastník",
+      emailLabel: !displayedEmail
+        ? "bez e-mailu"
+        : usesBsmFallback
+          ? `spoločný: ${displayedEmail}`
+          : usesUnitFallback
+            ? `e-mail jednotky: ${displayedEmail}`
+          : displayedEmail,
+    };
+  });
+}
+
 export function ownerEmailForEditing(
   coMode: unknown,
   unitEmail: string | null | undefined,
