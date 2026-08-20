@@ -2,6 +2,7 @@ import React from "react";
 import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import { compareUnitNumbers } from "@/lib/unitNumberSort";
 import { RegisterView } from "@/components/admin/RegisterView";
 
 export const revalidate = 0; // Prevent server caching
@@ -64,7 +65,7 @@ export default async function AdminRegisterPage() {
       role: o.role,
       admin: o.admins.length > 0
     }))
-  }));
+  })).sort((a, b) => compareUnitNumbers(a.no, b.no));
 
   return (
     <RegisterView
