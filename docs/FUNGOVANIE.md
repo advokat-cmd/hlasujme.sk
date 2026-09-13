@@ -59,7 +59,7 @@ V jednom dome môže byť naraz iba jedno vyhlásené alebo práve uzatvárané 
 
 Aktivácia vytvorí osobné odkazy a vyhodnotí pokusy o odoslanie. E-maily sa odosielajú v dávkach po najviac päť správ; ďalšia dávka začne najskôr päť sekúnd po predchádzajúcej. Pri 14 pozvánkach teda odídu dávky 5 + 5 + 4, približne v čase 0, 5 a 10 sekúnd. Toto obmedzenie zdieľajú aj ďalšie odosielania aplikácie, takže pri súbehu môže odoslanie trvať dlhšie. Po dočasnom obmedzení rýchlosti službou Resend aplikácia chvíľu počká a vykoná obmedzený počet opakovaní s ochranou proti duplicitám. Ak časť e-mailov zlyhá, hlasovanie už môže byť aktívne; administrátor skontroluje výsledok rozoslania a príslušnému registrovanému príjemcovi pozvánku odošle znova. Opakované stlačenie aktivácie už aktívneho hlasovania nespustí druhé hromadné rozoslanie.
 
-Ručné opätovné odoslanie je dostupné počas aktívneho hlasovania pred koncom termínu. Pri internom režime sa identifikuje aj konkrétny spoluvlastník, aby sa nezamenili osoby so spoločným e-mailom. Vlastník má používať najnovšiu pozvánku.
+Ručné opätovné odoslanie je dostupné počas aktívneho hlasovania pred koncom termínu. Pri internom režime sa identifikuje aj konkrétny spoluvlastník, aby sa nezamenili osoby so spoločným e-mailom. Nová pozvánka zachová predchádzajúce platné odkazy. Všetky odkazy toho istého vlastníka otvárajú tie isté odpovede a posledné potvrdené odovzdanie; hlasovacia váha sa nemení. Hlasovanie cez odkazy sa skončí uplynutím termínu alebo uzavretím hlasovania. Pri neistej odpovedi e-mailovej služby sa vytvorený odkaz tiež ponechá platný, pretože správa mohla byť doručená. Zrušenie prístupu cez uniknutý odkaz vyžaduje samostatný zásah správcu; opätovné odoslanie slúži na doručenie pozvánky.
 
 **Automatická pripomienka 48 hodín pred koncom nie je implementovaná.** Šablóna pripomienky existuje, ale v aplikácii nie je plánovač jej automatického odosielania. Rozhranie preto uvádza ručný postup. Dátum vytvorenia odkazu zároveň nepreukazuje doručenie e-mailu; úspešné prijatie správy poskytovateľom ešte nepotvrdzuje doručenie do schránky ani jej prečítanie.
 
@@ -113,7 +113,7 @@ Staršie archívy môžu obsahovať len uložené súčty otázok bez úplného 
 
 V staršej verzii sa priebežné kliknutia nesprávne ukladali ako hlasy ešte pred konečným potvrdením. Oprava tomu bráni do budúcnosti, ale zo samotných starých riadkov nemožno spoľahlivo zrekonštruovať úmysel používateľa. Audit preto automaticky nemaže ani neprepisuje historické hlasy.
 
-Nie sú implementované automatické 48-hodinové pripomienky, TOTP dvojfaktorové overenie, kvalifikovaný elektronický podpis, samostatný overovateľ ani viacjednotkový vlastnícky účet. Reálne doručenie produkčných e-mailov nebolo v rámci tohto overovania skúšané.
+Nie sú implementované automatické 48-hodinové pripomienky, TOTP dvojfaktorové overenie, kvalifikovaný elektronický podpis, samostatný overovateľ ani viacjednotkový vlastnícky účet. Doručenie štyroch obnovených produkčných pozvánok bolo 13. 9. 2026 overené v Resend.
 
 ## 11. Hlavné opravy technického auditu
 

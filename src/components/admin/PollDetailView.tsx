@@ -1035,6 +1035,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
             <div>
               E-maily sa odosielajú v dávkach po najviac <strong>5 správ</strong>. Ďalšia dávka začne najskôr
               po <strong>5 sekundách</strong>. Každý príjemca dostane samostatný e-mail a nevidí adresy ostatných vlastníkov.
+              {" "}Opätovné odoslanie zachová platnosť predchádzajúcich odkazov do skončenia hlasovania.
             </div>
           </div>
           

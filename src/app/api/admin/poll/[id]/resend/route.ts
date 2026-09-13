@@ -85,21 +85,12 @@ export async function POST(
     const tokenHash = hashToken(plainToken);
 
     // Perform database operations in transaction
-    const replacement = await db.$transaction(async (tx) => {
+    await db.$transaction(async (tx) => {
       await acquirePollLock(tx, pollId);
       const current = await tx.poll.findUnique({ where: { id: pollId } });
       if (!current || current.status !== "active" || current.endAt < new Date()) throw new PollConflict("Hlasovanie už nie je otvorené na odoslanie pozvánky.");
-      // Preserve existing usable links until the replacement email is accepted.
-      const previous = await tx.voteToken.findMany({
-        where: {
-          pollId,
-          unitId: unit.id,
-          ownerId
-        }
-      });
-
-      // Create new token
-      const created = await tx.voteToken.create({
+      // Resending adds an invitation; earlier links keep access to the same ballot.
+      await tx.voteToken.create({
         data: {
           pollId,
           unitId: unit.id,
@@ -108,7 +99,6 @@ export async function POST(
           expiresAt: poll.endAt
         }
       });
-      return { createdId: created.id, previousIds: previous.map(token => token.id) };
     });
 
     // Send email invitation
@@ -139,16 +129,10 @@ export async function POST(
     });
 
     if (!sent) {
-      await db.$transaction(async tx => {
-        await acquirePollLock(tx, pollId);
-        await tx.voteToken.deleteMany({ where: { id: replacement.createdId } });
-      });
-      return NextResponse.json({ error: "E-mail sa nepodarilo odoslať." }, { status: 500 });
+      // A timeout can follow provider acceptance, so this link may already be delivered.
+      // Keep it as well as older links; normal poll and owner validation still applies.
+      return NextResponse.json({ error: "Prijatie e-mailu službou sa nepodarilo potvrdiť. Existujúce hlasovacie odkazy zostávajú platné." }, { status: 500 });
     }
-    await db.$transaction(async tx => {
-      await acquirePollLock(tx, pollId);
-      await tx.voteToken.deleteMany({ where: { id: { in: replacement.previousIds } } });
-    });
 
     await createAuditLogEntry("VOTE_TOKEN_RESENT", `admin:${session.email}`, {
       message: `Znova odoslaná pozvánka pre vlastníka ${ownerName} (Byt č. ${unit.no}, e-mail: ${email}).`,

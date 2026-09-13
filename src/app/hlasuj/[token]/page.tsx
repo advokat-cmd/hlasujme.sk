@@ -123,7 +123,6 @@ export default async function VoterPage({ params }: PageProps) {
 
   // 3. Fetch latest voting state
   const initialAnswers: Record<number, VoteAnswer> = {};
-  let lastVoteDate: Date | null = null;
 
   if (owner) {
     // Co-owner subvotes
@@ -131,17 +130,14 @@ export default async function VoterPage({ params }: PageProps) {
       where: { pollId: poll.id, unitId: unit.id, ownerId: owner.id },
       orderBy: [{ questionNo: "asc" }, { version: "desc" }]
     });
-    const latestMap = new Map<number, { answer: VoteAnswer; date: Date }>();
+    const latestMap = new Map<number, VoteAnswer>();
     for (const sv of subvotes) {
       if (!latestMap.has(sv.questionNo)) {
-        latestMap.set(sv.questionNo, { answer: sv.answer, date: sv.createdAt });
+        latestMap.set(sv.questionNo, sv.answer);
       }
     }
-    latestMap.forEach((v, qNo) => {
-      initialAnswers[qNo] = v.answer;
-      if (!lastVoteDate || v.date > lastVoteDate) {
-        lastVoteDate = v.date;
-      }
+    latestMap.forEach((answer, qNo) => {
+      initialAnswers[qNo] = answer;
     });
   } else {
     // Unit votes
@@ -149,17 +145,14 @@ export default async function VoterPage({ params }: PageProps) {
       where: { pollId: poll.id, unitId: unit.id },
       orderBy: [{ questionNo: "asc" }, { version: "desc" }]
     });
-    const latestMap = new Map<number, { answer: VoteAnswer; date: Date }>();
+    const latestMap = new Map<number, VoteAnswer>();
     for (const v of votes) {
       if (!latestMap.has(v.questionNo)) {
-        latestMap.set(v.questionNo, { answer: v.answer, date: v.createdAt });
+        latestMap.set(v.questionNo, v.answer);
       }
     }
-    latestMap.forEach((v, qNo) => {
-      initialAnswers[qNo] = v.answer;
-      if (!lastVoteDate || v.date > lastVoteDate) {
-        lastVoteDate = v.date;
-      }
+    latestMap.forEach((answer, qNo) => {
+      initialAnswers[qNo] = answer;
     });
   }
 
@@ -223,7 +216,19 @@ export default async function VoterPage({ params }: PageProps) {
       }
     : null;
 
-  const initialSubmittedAtFormatted = tokenRecord.usedAt ? formatSlovakDate(tokenRecord.usedAt) : null;
+  // Replacement and original links share one ballot. Only an explicit submission
+  // proves it was sent; legacy vote rows may instead be unconfirmed autosaves.
+  const latestSubmission = await db.voteToken.findFirst({
+    where: {
+      pollId: poll.id,
+      unitId: unit.id,
+      ownerId: tokenRecord.ownerId,
+      usedAt: { not: null },
+    },
+    orderBy: { usedAt: "desc" },
+    select: { usedAt: true },
+  });
+  const initialSubmittedAtFormatted = latestSubmission?.usedAt ? formatSlovakDate(latestSubmission.usedAt) : null;
 
   return (
     <VoterAppClient

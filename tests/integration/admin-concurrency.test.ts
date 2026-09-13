@@ -7,7 +7,7 @@ import { lockBuilding } from "../../src/lib/pollLifecycle";
 
 const baseUrl = process.env.INTEGRATION_BASE_URL;
 
-test("publication and invitation rotation serialize concurrent requests", { skip: !baseUrl }, async (t) => {
+test("publication and invitation resend preserve concurrent requests", { skip: !baseUrl }, async (t) => {
   assertSafeDestructiveDatabase();
   assert.ok(baseUrl);
   const databaseUrl = new URL(process.env.DATABASE_URL!);
@@ -81,7 +81,7 @@ test("publication and invitation rotation serialize concurrent requests", { skip
       assert.equal((await db.unit.findUniqueOrThrow({ where: { id: unit.id } })).no, "1");
     });
 
-    await t.test("invitation rotation waits for an old-link vote to commit before invalidation", async () => {
+    await t.test("invitation resend preserves an old-link vote and both invitations", async () => {
       const originalToken = randomBytes(32).toString("hex");
       const original = await db.voteToken.create({ data: { pollId: poll.id, unitId: unit.id, tokenHash: hash(originalToken), expiresAt: poll.endAt } });
       const initialTokens = await db.voteToken.count({ where: { pollId: poll.id } });
@@ -96,16 +96,18 @@ test("publication and invitation rotation serialize concurrent requests", { skip
         return Number(rows[0].count) > 0;
       }, "Old-link vote did not pause after acquiring its poll lock");
       await releaseEmail();
-      await waitUntil(async () => await advisoryWaiters(poll.id) > 0, "Resend token invalidation must wait for the in-flight vote");
+      const resent = await resend;
+      assert.equal(resent.status, 200, await resent.text());
       assert.ok(await db.voteToken.findUnique({ where: { id: original.id } }), "An in-flight vote's token must remain valid until commit");
       await releaseVotes();
       const voted = await vote;
       assert.equal(voted.status, 200, await voted.text());
-      const resent = await resend;
-      assert.equal(resent.status, 200, await resent.text());
       assert.equal(await db.vote.count({ where: { pollId: poll.id, unitId: unit.id, answer: "agree" } }), 1);
-      assert.equal(await db.voteToken.findUnique({ where: { id: original.id } }), null);
-      assert.equal(await db.voteToken.count({ where: { pollId: poll.id } }), 1);
+      assert.ok(await db.voteToken.findUnique({ where: { id: original.id } }));
+      assert.equal(await db.voteToken.count({ where: { pollId: poll.id } }), initialTokens + 1);
+      const repeated = await jsonRequest(`/api/vote/${originalToken}`, "", { answers: { "1": "agree" }, finalize: true });
+      assert.equal(repeated.status, 200, await repeated.text());
+      assert.equal(await db.vote.count({ where: { pollId: poll.id, unitId: unit.id } }), 1, "Using an older link must not add another vote for unchanged answers");
     });
   } finally {
     await Promise.allSettled(releases.map(release => release()));
