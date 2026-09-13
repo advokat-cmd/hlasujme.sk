@@ -1,6 +1,6 @@
 import { db } from "./db";
 import crypto from "crypto";
-import { PollStatus } from "@prisma/client";
+import { PollStatus, type Prisma } from "@prisma/client";
 
 export function hashToken(token: string): string {
   return crypto.createHash("sha256").update(token).digest("hex");
@@ -22,8 +22,8 @@ export function isPollOpen(
   return poll.status === PollStatus.active && poll.startAt <= now && poll.endAt >= now;
 }
 
-export async function generateVoteTokens(pollId: string): Promise<GeneratedTokenInfo[]> {
-  const poll = await db.poll.findUnique({
+export async function generateVoteTokens(pollId: string, client: Prisma.TransactionClient = db): Promise<GeneratedTokenInfo[]> {
+  const poll = await client.poll.findUnique({
     where: { id: pollId },
     include: { building: { include: { units: { include: { owners: true } } } } }
   });
@@ -46,7 +46,7 @@ export async function generateVoteTokens(pollId: string): Promise<GeneratedToken
         const plainToken = crypto.randomBytes(32).toString("hex");
         const tokenHash = hashToken(plainToken);
 
-        await db.voteToken.create({
+        await client.voteToken.create({
           data: {
             pollId,
             unitId: unit.id,
@@ -73,7 +73,7 @@ export async function generateVoteTokens(pollId: string): Promise<GeneratedToken
       const plainToken = crypto.randomBytes(32).toString("hex");
       const tokenHash = hashToken(plainToken);
 
-      await db.voteToken.create({
+      await client.voteToken.create({
         data: {
           pollId,
           unitId: unit.id,
@@ -105,7 +105,20 @@ export async function generateVoteTokens(pollId: string): Promise<GeneratedToken
   return tokenInfos;
 }
 
-export async function validateVoteToken(plainToken: string) {
+/** A token must still address the same eligible unit and voting mode. */
+export function isEligibleVoteTokenTarget(token: {
+  ownerId: string | null;
+  poll: { buildingId: string };
+  unit: { buildingId: string; status: string; votes: number; coMode: string; owners: Array<{ id: string }> };
+}): boolean {
+  const { unit, poll, ownerId } = token;
+  if (unit.buildingId !== poll.buildingId || unit.status !== "active" || !Number.isSafeInteger(unit.votes) || unit.votes <= 0) return false;
+  return unit.coMode === "internal"
+    ? Boolean(ownerId && unit.owners.some(owner => owner.id === ownerId))
+    : ownerId === null;
+}
+
+export async function validateVoteToken(plainToken: string, options?: { allowBeforeStart?: boolean }) {
   if (!plainToken) return null;
   const tokenHash = hashToken(plainToken);
 
@@ -130,10 +143,13 @@ export async function validateVoteToken(plainToken: string) {
   const poll = tokenRecord.poll;
 
   // Verify that the token has not expired and the poll is active
-  if (tokenRecord.expiresAt < now || !isPollOpen(poll, now)) {
+  const withinWindow = options?.allowBeforeStart
+    ? poll.status === PollStatus.active && poll.endAt >= now
+    : isPollOpen(poll, now);
+  if (tokenRecord.expiresAt < now || !withinWindow) {
     return null;
   }
-  if (tokenRecord.unit.buildingId !== poll.buildingId) {
+  if (!isEligibleVoteTokenTarget(tokenRecord)) {
     return null;
   }
 

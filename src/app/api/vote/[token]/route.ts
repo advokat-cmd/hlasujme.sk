@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isPollOpen, validateVoteToken } from "@/lib/tokens";
+import { isEligibleVoteTokenTarget, isPollOpen, validateVoteToken } from "@/lib/tokens";
 import { db } from "@/lib/db";
 import { VoteAnswer } from "@prisma/client";
 import { createAuditLogEntryWithTx } from "@/lib/hashChain";
@@ -26,8 +26,18 @@ export async function POST(
     }
 
     const { token } = await params;
-    const body = await request.json() as { answers?: unknown; finalize?: unknown };
+    let body: { answers?: unknown; finalize?: unknown };
+    try {
+      const input: unknown = await request.json();
+      if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("INVALID_BODY");
+      body = input;
+    } catch {
+      return NextResponse.json({ error: "Chybné údaje hlasovania." }, { status: 400 });
+    }
     const finalize = body.finalize === true;
+    if (!finalize) {
+      return NextResponse.json({ error: "Hlas je potrebné výslovne potvrdiť a odoslať." }, { status: 400 });
+    }
 
     // 1. Validate magic link token
     const tokenInfo = await validateVoteToken(token);
@@ -67,8 +77,8 @@ export async function POST(
         !isPollOpen(lockedToken.poll, lockedNow) ||
         lockedToken.pollId !== poll.id ||
         lockedToken.unitId !== unit.id ||
-        lockedToken.unit.buildingId !== lockedToken.poll.buildingId ||
-        (lockedToken.ownerId && !lockedToken.unit.owners.some(item => item.id === lockedToken.ownerId))
+        lockedToken.ownerId !== tokenRecord.ownerId ||
+        !isEligibleVoteTokenTarget(lockedToken)
       ) {
         throw new Error("POLL_NOT_OPEN");
       }
@@ -136,13 +146,12 @@ export async function POST(
         }
       }
 
-      if (finalize) {
-        // Mark token as used
-        await tx.voteToken.update({
-          where: { id: tokenRecord.id },
-          data: { usedAt: new Date() }
-        });
-      }
+      const submittedToken = await tx.voteToken.update({
+        where: { id: tokenRecord.id },
+        data: { usedAt: new Date() },
+        select: { usedAt: true },
+      });
+      if (!submittedToken.usedAt) throw new Error("MISSING_SUBMISSION_TIME");
       if (changedQuestions.length > 0 || finalize) {
         const actorName = owner
           ? `${unit.no}/${owner.name}`
@@ -162,10 +171,12 @@ export async function POST(
           }
         );
       }
+      return submittedToken.usedAt;
     });
 
+    let submittedAt: Date;
     try {
-      await runVoteTransaction();
+      submittedAt = await runVoteTransaction();
     } catch (txErr) {
       if (txErr instanceof Error && txErr.message === "POLL_NOT_OPEN") {
         return NextResponse.json({ error: "Hlasovanie nie je otvorené." }, { status: 409 });
@@ -186,7 +197,8 @@ export async function POST(
           };
         });
 
-        const dateFormatted = new Date().toLocaleString("sk-SK", {
+        const dateFormatted = submittedAt.toLocaleString("sk-SK", {
+          timeZone: "Europe/Bratislava",
           day: "numeric",
           month: "numeric",
           year: "numeric",
@@ -215,7 +227,7 @@ export async function POST(
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, submittedAt: submittedAt.toISOString() });
   } catch (err) {
     console.error("Cast vote API error:", err);
     return NextResponse.json({ error: "Interná chyba servera pri zaznamenávaní hlasu." }, { status: 500 });

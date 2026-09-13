@@ -1,6 +1,7 @@
 import { PrismaClient, UnitType, CoMode, OwnerRole, PollStatus, MajorityType, VoteAnswer } from "@prisma/client";
 import * as argon2 from "argon2";
 import { assertSafeDestructiveDatabase } from "../scripts/check-db-boundary";
+import { createHash } from "node:crypto";
 
 const prisma = new PrismaClient();
 
@@ -416,13 +417,20 @@ async function main() {
   }
 
   // 8. Seed Audit Log genesis entry
+  const genesisPayload = JSON.stringify({ message: 'Database initialized and seeded.' });
+  const genesisPrevHash = '0'.repeat(64);
+  const genesisCreatedAt = new Date();
+  const genesisHash = createHash("sha256")
+    .update(`${genesisPrevHash}GENESISsystem${genesisPayload}${genesisCreatedAt.toISOString()}`)
+    .digest("hex");
   await prisma.auditLog.create({
     data: {
       action: 'GENESIS',
       actor: 'system',
-      payload: JSON.stringify({ message: 'Database initialized and seeded.' }),
-      prevHash: '0000000000000000000000000000000000000000000000000000000000000000',
-      entryHash: 'f4e0c4b22c7a10be14c5c24e6de8a846b7a2d33454790bdde566ee26871536b3'
+      payload: genesisPayload,
+      prevHash: genesisPrevHash,
+      entryHash: genesisHash,
+      createdAt: genesisCreatedAt,
     }
   });
 

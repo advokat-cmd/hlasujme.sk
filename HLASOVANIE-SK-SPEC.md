@@ -104,7 +104,7 @@ Prototyp už prešiel revíziou a opravami (sekcia 3) — výsledné správanie 
 
 **Výsledok otázky:**
 - `agree ≥ need` → **schválené (approved)**.
-- inak počas otvoreného hlasovania: ak `agree + none + disputed ≥ need` → **zatiaľ nedosiahnutá väčšina (short)**; inak **neschválené (rejected)**.
+- inak počas otvoreného hlasovania → **zatiaľ nedosiahnutá väčšina (short)**. Už odovzdané nesúhlasné hlasy a zdržania sa môžu do uzavretia zmeniť, preto ešte nejde o konečné zamietnutie.
 - **Po uzavretí** hlasovania sa `short` vyhodnotí ako **rejected** (už nie je čo doplniť).
 
 **Ďalšie pravidlá:**
@@ -162,7 +162,7 @@ HTTPS-only · CSP a bezpečnostné hlavičky · rate-limiting (prihlásenie aj h
 - Všetky časy sú serverové; klientske hodnoty sa neberú.
 - Po uzavretí vznikne `sealedResult` (SHA-256 + serverová pečiatka); archív je nemenný.
 
-**Auth:** heslá argon2id, server session, rate-limiting; vlastník nemá účet (len link).
+**Auth:** heslá argon2id, server session, rate-limiting. Vlastník hlasuje cez osobný link bez účtu; voliteľný účet klientskej zóny mu sprístupňuje otázky a podklady vlastného domu a po uzavretí aj výsledky a zápisnice. Priebežné výsledky zostávajú iba administrátorovi.
 
 **Prístupnosť:** zachovaná úroveň WCAG 2.2 AA zo sekcie 3.
 

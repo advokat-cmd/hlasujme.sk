@@ -67,16 +67,14 @@ export const CloseModal: React.FC<CloseModalProps> = ({
   };
 
   const checks = [
-    { ok: true, t: "Každá otázka má priradený typ väčšiny" },
-    { ok: true, t: "Všetci vlastníci sú priradení k jednotkám" },
-    { ok: true, t: "Žiadne duplicitné e-mailové adresy" },
+    { ok: questions.length > 0, t: `Počet otázok s vypočítaným výsledkom: ${questions.length}` },
     ...conflictChecks.disputedUnitsList.map(t => ({ ok: false, t })),
     ...conflictChecks.missingEmailsList.map(t => ({ ok: false, t })),
   ];
 
   return (
     <div
-      onClick={onClose}
+      onClick={() => { if (!loading) onClose(); }}
       style={{
         position: "fixed",
         inset: 0,
@@ -110,7 +108,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
               {step === 0 ? "Kontrola pred uzavretím" : "Dvojitá kontrola výsledkov"}
             </h3>
             <div style={{ fontSize: "12.5px", color: "var(--ink-soft)" }}>
-              {step === 0 ? "Pred uzamknutím hlasovania" : "Pred odoslaním výsledkov vlastníkom"}
+              {pollTitle} · {step === 0 ? "Pred uzamknutím hlasovania" : "Pred zapečatením výsledkov"}
             </div>
           </div>
         </div>
@@ -146,7 +144,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   borderRadius: 8,
                 }}
               >
-                Upozornenia nebránia uzavretiu, no sporné a nedoručené jednotky budú v zápisnici uvedené samostatne.
+                Upozornenia nebránia uzavretiu. Sporné hlasy sa nezapočítajú medzi platné odpovede. Chýbajúci e-mail sám nepotvrdzuje nedoručenie ostatných pozvánok.
               </div>
             </div>
           ) : (
@@ -191,7 +189,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   marginTop: 6,
                 }}
               >
-                Po potvrdení sa vygeneruje finálna PDF zápisnica a bezpečne uloží na serveri. Výsledky sa vlastníkom <strong>neodošlú automaticky</strong> — odošlete ich tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Archív je nemenný — prípadná oprava sa rieši dodatkom.
+                Po potvrdení sa hlasovanie uzamkne a finálna PDF zápisnica sa uloží na serveri. Výsledky vlastníkom odošlete tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Zapečatené výsledky sa už neprepočítavajú podľa neskorších zmien registra.
               </div>
             </div>
           )}

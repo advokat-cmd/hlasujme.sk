@@ -7,6 +7,7 @@ import * as argon2 from "argon2";
 import { validateNewPassword, validateOptionalEmail, validateOwners, type NormalizedOwner } from "@/lib/security/input";
 import { assertAccountMutationAllowed } from "@/lib/security/accounts";
 import { synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
+import { assertNoRunningPoll, lockBuilding, PollConflict } from "@/lib/pollLifecycle";
 
 export async function POST(request: Request) {
   try {
@@ -72,6 +73,8 @@ export async function POST(request: Request) {
     ));
 
     const unit = await db.$transaction(async (tx) => {
+      await lockBuilding(tx, building.id);
+      await assertNoRunningPoll(tx, building.id);
       const createdUnit = await tx.unit.create({
         data: {
           no: no.trim(),
@@ -129,6 +132,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, unit });
   } catch (err) {
+    if (err instanceof PollConflict) return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("Unit create error:", err);
     return NextResponse.json({ error: "Chyba pri pridaní jednotky." }, { status: 500 });
   }

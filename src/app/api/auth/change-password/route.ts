@@ -3,7 +3,7 @@ import { getAdminSession, revokeAdminSessions } from "@/lib/session";
 import { db } from "@/lib/db";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
-import { validateNewPassword } from "@/lib/security/input";
+import { validatePasswordChangeInput } from "@/lib/security/input";
 
 export async function POST(request: Request) {
   try {
@@ -12,16 +12,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Neprihlásený používateľ." }, { status: 401 });
     }
 
-    const { oldPassword, newPassword } = await request.json();
-    if (!oldPassword) {
-      return NextResponse.json({ error: "Staré heslo je povinné." }, { status: 400 });
-    }
-    let normalizedPassword: string;
+    let credentials: ReturnType<typeof validatePasswordChangeInput>;
     try {
-      normalizedPassword = validateNewPassword(newPassword);
+      credentials = validatePasswordChangeInput(await request.json());
     } catch (error) {
-      return NextResponse.json({ error: error instanceof Error ? error.message : "Neplatné nové heslo." }, { status: 400 });
+      return NextResponse.json({ error: error instanceof SyntaxError ? "Neplatné údaje zmeny hesla." : error instanceof Error ? error.message : "Neplatné údaje zmeny hesla." }, { status: 400 });
     }
+    const { oldPassword, newPassword } = credentials;
 
     const admin = await db.admin.findUnique({
       where: { id: session.adminId }
@@ -37,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Zadané staré heslo je nesprávne." }, { status: 400 });
     }
 
-    const passwordHash = await argon2.hash(normalizedPassword, {
+    const passwordHash = await argon2.hash(newPassword, {
       type: argon2.argon2id
     });
 

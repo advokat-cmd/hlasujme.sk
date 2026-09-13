@@ -69,8 +69,8 @@ export function calculateNeed(majorityType: MajorityType | `${MajorityType}`, to
   }
 }
 
-function computeEffectiveVote(
-  unit: UnitWithOwners,
+export function computeEffectiveVote(
+  unit: Pick<UnitWithOwners, "id" | "coMode"> & { owners: Array<{ id: string; share: number }> },
   questionNo: number,
   latestVotes: Map<string, VoteRow>,
   latestSubvotesByUnitQuestion: Map<string, SubvoteRow[]>
@@ -105,7 +105,9 @@ function computeEffectiveVote(
       }
     }
 
-    if (bestShare > 0.5 && bestAnswer) {
+    // Summing fractional shares must not turn an exact 50 % tie into a majority.
+    const roundingTolerance = Number.EPSILON * unit.owners.length;
+    if (bestShare - 0.5 > roundingTolerance && bestAnswer) {
       return {
         answer: bestAnswer,
         disputed: false,
@@ -129,10 +131,10 @@ function computeEffectiveVote(
   return { answer: latestVote.answer, disputed: false, note: null };
 }
 
-function computeTally(
+export function computeTally(
   majorityType: MajorityType,
   questionNo: number,
-  units: UnitWithOwners[],
+  units: Array<Pick<UnitWithOwners, "id" | "votes">>,
   effectiveVotes: Map<string, Map<number, EffectiveVote>>,
   treatAsClosed: boolean
 ): QuestionTally {
@@ -144,7 +146,7 @@ function computeTally(
   let disputed = 0;
 
   for (const u of units) {
-    const w = u.votes || 1;
+    const w = u.votes;
     total += w;
 
     const eff = effectiveVotes.get(u.id)?.get(questionNo) || {
@@ -173,15 +175,12 @@ function computeTally(
 
   // Status resolution
   let status: "approved" | "rejected" | "short";
-  if (agree >= need) {
+  if (total > 0 && agree >= need) {
     status = "approved";
   } else {
-    const couldReach = agree + none + disputed >= need;
-    if (treatAsClosed) {
-      status = "rejected";
-    } else {
-      status = couldReach ? "short" : "rejected";
-    }
+    // Existing disagree/abstain votes can still be changed until closing.
+    // A currently unmet threshold is therefore provisional, never a final rejection.
+    status = treatAsClosed ? "rejected" : "short";
   }
 
   return { total, agree, disagree, abstain, none, disputed, voted, need, status };
@@ -196,9 +195,10 @@ function computeTally(
  */
 export async function computePollResults(
   pollId: string,
-  opts?: { treatAsClosed?: boolean }
+  opts?: { treatAsClosed?: boolean },
+  client: Prisma.TransactionClient = db
 ): Promise<PollResults> {
-  const poll = await db.poll.findUnique({
+  const poll = await client.poll.findUnique({
     where: { id: pollId },
     include: {
       questions: { orderBy: { no: "asc" } },
@@ -211,16 +211,16 @@ export async function computePollResults(
   }
 
   const [units, votes, subvotes] = await Promise.all([
-    db.unit.findMany({
+    client.unit.findMany({
       where: { buildingId: poll.buildingId, status: "active" },
       orderBy: { no: "asc" },
       include: { owners: true }
     }),
-    db.vote.findMany({
+    client.vote.findMany({
       where: { pollId },
       select: { unitId: true, questionNo: true, answer: true, version: true }
     }),
-    db.coownerSubvote.findMany({
+    client.coownerSubvote.findMany({
       where: { pollId },
       select: { unitId: true, ownerId: true, questionNo: true, answer: true, version: true }
     })

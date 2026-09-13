@@ -16,14 +16,16 @@ export default async function AdminLayout({
   }
 
   // 2. Fetch active poll (to pass link to sidebar)
-  const activePoll = await db.poll.findFirst({
+  const activePoll = session.role === "vlastnik" ? null : await db.poll.findFirst({
     where: { status: "active" }
   });
+  const userUnit = session.unitId ? await db.unit.findUnique({ where: { id: session.unitId }, select: { no: true, building: { select: { name: true, short: true } } } }) : null;
+  const building = session.role === "vlastnik" ? userUnit?.building : await db.building.findFirst({ select: { name: true, short: true } });
 
   return (
     <div className="admin-layout-wrapper">
       {/* Sidebar (Client Component to handle client state and hooks) */}
-      <AdminSidebar user={session} activePollId={activePoll?.id || null} />
+      <AdminSidebar user={{ ...session, unitNo: userUnit?.no }} activePollId={activePoll?.id || null} buildingName={building?.short || building?.name || "Hlasujme.sk"} />
 
       {/* Main content scroll container */}
       <main

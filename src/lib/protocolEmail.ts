@@ -64,7 +64,7 @@ export async function sendProtocolEmails(pollId: string, actor: string): Promise
 
   const [units, alreadySentLogs] = await Promise.all([
     db.unit.findMany({
-      where: { buildingId: poll.buildingId },
+      where: { buildingId: poll.buildingId, status: "active" },
       include: { owners: true }
     }),
     db.protocolEmailLog.findMany({
@@ -89,7 +89,7 @@ export async function sendProtocolEmails(pollId: string, actor: string): Promise
   for (const u of units) {
     if (u.coMode === "internal") {
       for (const o of u.owners) {
-        addRecipient(o.email, o.name);
+        addRecipient(o.email || u.email, o.name);
       }
     } else {
       let ownerName = "vlastník";

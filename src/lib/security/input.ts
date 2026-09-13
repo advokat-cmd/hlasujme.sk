@@ -7,6 +7,8 @@ export type MajorityInput = (typeof MAJORITIES)[number];
 const CO_MODES = ["single", "rep", "internal", "majority", "bsm", "legal"] as const;
 export type CoModeInput = (typeof CO_MODES)[number];
 
+const MAX_PASSWORD_LENGTH = 4096;
+
 export interface NormalizedOwner {
   id?: string;
   first: string;
@@ -46,7 +48,7 @@ export function validateLoginInput(value: unknown): { email: string; password: s
   const input = record(value, "Neplatné prihlasovacie údaje.");
   const email = requiredText(input.email, "E-mail").toLowerCase();
   const password = requiredText(input.password, "Heslo");
-  if (email.length > 320 || password.length > 4096) throw new Error("Neplatné prihlasovacie údaje.");
+  if (email.length > 320 || password.length > MAX_PASSWORD_LENGTH) throw new Error("Neplatné prihlasovacie údaje.");
   return { email, password };
 }
 
@@ -69,7 +71,17 @@ export function validateNewPassword(value: unknown): string {
   if (typeof value !== "string" || value.trim().length < 12) {
     throw new Error("Nové heslo musí mať aspoň 12 znakov.");
   }
+  if (value.trim().length > MAX_PASSWORD_LENGTH) {
+    throw new Error(`Nové heslo môže mať najviac ${MAX_PASSWORD_LENGTH} znakov.`);
+  }
   return value.trim();
+}
+
+export function validatePasswordChangeInput(value: unknown): { oldPassword: string; newPassword: string } {
+  const input = record(value, "Neplatné údaje zmeny hesla.");
+  const oldPassword = requiredText(input.oldPassword, "Staré heslo");
+  if (oldPassword.length > MAX_PASSWORD_LENGTH) throw new Error("Neplatné staré heslo.");
+  return { oldPassword, newPassword: validateNewPassword(input.newPassword) };
 }
 
 export function validateOwners(value: unknown, coModeValue: unknown): NormalizedOwner[] {
@@ -99,6 +111,11 @@ export function validateOwners(value: unknown, coModeValue: unknown): Normalized
       password: typeof owner.password === "string" ? owner.password : "",
     };
   });
+
+  const ownerIds = owners.flatMap(owner => owner.id ? [owner.id] : []);
+  if (new Set(ownerIds).size !== ownerIds.length) {
+    throw new Error("Vlastník môže byť v jednotke uvedený iba raz.");
+  }
 
   if (coModeValue === "internal") {
     const total = owners.reduce((sum, owner) => sum + owner.share, 0);

@@ -61,13 +61,9 @@ interface VoterAppClientProps {
 }
 
 function formatSlovakDate(dateStr: string) {
-  const d = new Date(dateStr);
-  const day = d.getDate();
-  const month = d.getMonth() + 1;
-  const year = d.getFullYear();
-  const hours = String(d.getHours()).padStart(2, "0");
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  return `${day}. ${month}. ${year} o ${hours}:${minutes}`;
+  return new Date(dateStr).toLocaleString("sk-SK", {
+    timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit",
+  }).replace(",", " o");
 }
 
 export function VoterAppClient({
@@ -98,33 +94,19 @@ export function VoterAppClient({
     return () => window.removeEventListener("resize", checkViewport);
   }, []);
 
-  const saveVoteProgress = async (updatedAnswers: Record<number, VoteAnswer>) => {
-    try {
-      const res = await fetch(`/api/vote/${token}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers: updatedAnswers, finalize: false }),
-      });
-      if (!res.ok) {
-        const data = await res.json();
-        setSubmitError(data.error || "Nepodarilo sa priebežne uložiť hlas.");
-      }
-    } catch (err) {
-      setSubmitError("Chyba spojenia pri priebežnom ukladaní hlasu.");
-    }
-  };
-
   const setChoice = (no: number, val: VoteAnswer) => {
-    const nextAnswers = { ...answers, [no]: val };
-    setAnswers(nextAnswers);
+    setAnswers((current) => ({ ...current, [no]: val }));
     setSubmitError(null);
-    saveVoteProgress(nextAnswers);
   };
 
   const allAnswered = poll.questions.every((q) => answers[q.no]);
 
   const submitVote = async () => {
     if (isSubmitting) return;
+    if (!allAnswered) {
+      setSubmitError("Pred odoslaním odpovedzte na všetky otázky.");
+      return;
+    }
     setIsSubmitting(true);
     setSubmitError(null);
 
@@ -139,7 +121,7 @@ export function VoterAppClient({
       if (!res.ok) {
         setSubmitError(data.error || "Nepodarilo sa odoslať hlasovanie.");
       } else {
-        const nowFormatted = formatSlovakDate(new Date().toISOString());
+        const nowFormatted = formatSlovakDate(data.submittedAt);
         setSubmittedAt(nowFormatted);
         setPhase("done");
       }
@@ -157,9 +139,9 @@ export function VoterAppClient({
 
   const voterName = owner
     ? owner.name
-    : unit.owners && unit.owners.length > 0
+    : unit.actingPerson || (unit.owners && unit.owners.length > 0
     ? unit.owners.map((o) => `${o.first} ${o.last}`).join(", ")
-    : unit.actingPerson || "Vlastník";
+    : "Vlastník");
 
   const appContent = (
     <div
@@ -195,7 +177,7 @@ export function VoterAppClient({
           answers={answers}
           setChoice={setChoice}
           allAnswered={allAnswered}
-          onRecap={() => setPhase("recap")}
+          onRecap={() => { if (allAnswered) setPhase("recap"); }}
         />
       )}
       {phase === "recap" && (
@@ -209,6 +191,7 @@ export function VoterAppClient({
           submitError={submitError}
           onBack={() => setPhase("vote")}
           onEdit={(idx) => {
+            if (isSubmitting) return;
             setQi(idx);
             setPhase("vote");
           }}
@@ -247,7 +230,7 @@ export function VoterAppClient({
         <div style={{ padding: "0 16px 14px", textAlign: "center", flexShrink: 0 }}>
           <div style={{ fontSize: 13, color: "var(--ink-soft)", display: "inline-flex", alignItems: "center", gap: 8 }}>
             <Ic name="link" size={15} style={{ color: "var(--primary)" }} />
-            Takto vidí hlasovanie vlastník po kliknutí na osobný link v e-maile
+            Elektronické hlasovanie vlastníka
           </div>
         </div>
       )}
@@ -678,7 +661,7 @@ function VVote({
         {qi > 0 && (
           <Btn kind="secondary" icon="chevL" ariaLabel="Predchádzajúca otázka" onClick={() => setQi(qi - 1)} />
         )}
-        <Btn kind="primary" full iconR={last ? "check" : "chevR"} disabled={!choice} onClick={next}>
+        <Btn kind="primary" full iconR={last ? "check" : "chevR"} disabled={!choice || (last && !allAnswered)} onClick={next}>
           {last ? "Skontrolovať a odoslať" : "Ďalšia otázka"}
         </Btn>
       </div>
@@ -765,6 +748,7 @@ function VRecap({
                   </span>
                   <button
                     type="button"
+                    disabled={isSubmitting}
                     onClick={() => onEdit(idx)}
                     aria-label={`Zmeniť odpoveď na otázku ${q.no}`}
                     style={{
@@ -807,7 +791,7 @@ function VRecap({
         )}
 
         <p style={{ fontSize: 11.5, color: "var(--ink-faint)", lineHeight: 1.5, marginTop: 18 }}>
-          Po odoslaní si môžete stiahnuť potvrdenie. Svoj hlas môžete kedykoľvek zmeniť opätovným otvorením tohto odkazu až do ukončenia hlasovania.
+          Odpovede sa započítajú až po stlačení „Odoslať hlas“. Rozpracované zmeny sa po obnovení stránky neuchovajú. Po odoslaní si môžete stiahnuť potvrdenie a hlas zmeniť až do ukončenia hlasovania.
         </p>
       </div>
 

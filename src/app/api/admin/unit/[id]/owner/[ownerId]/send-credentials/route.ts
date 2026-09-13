@@ -52,7 +52,7 @@ export async function POST(
       type: argon2.argon2id
     });
 
-    // 3. Upsert admin record with role 'vlastnik'
+    // 3. Refresh credentials without changing an existing account's permissions.
     const [ownerAccount, emailAccount] = await Promise.all([
       db.admin.findFirst({ where: { ownerId: owner.id } }),
       db.admin.findUnique({ where: { email: loginEmail } }),
@@ -61,8 +61,9 @@ export async function POST(
       return NextResponse.json({ error: "E-mail už používa iný účet." }, { status: 409 });
     }
     const existingAccount = ownerAccount ?? emailAccount;
+    const accountRole = existingAccount?.role ?? "vlastnik";
     try {
-      assertAccountMutationAllowed(session, existingAccount, "vlastnik");
+      assertAccountMutationAllowed(session, existingAccount, accountRole);
     } catch (error) {
       return NextResponse.json({ error: error instanceof Error ? error.message : "Nedostatočné oprávnenia." }, { status: 403 });
     }
@@ -70,7 +71,7 @@ export async function POST(
     const accountData = {
         name: owner.name,
         passwordHash,
-        role: "vlastnik",
+        role: accountRole,
         unitId: unit.id,
         ownerId: owner.id
     };
@@ -95,11 +96,16 @@ export async function POST(
       rawPassword
     });
 
-    await sendEmail({
+    const sent = await sendEmail({
       to: loginEmail,
       subject: emailContent.subject,
       html: emailContent.html
     });
+    if (!sent) {
+      return NextResponse.json({
+        error: "Heslo bolo zmenené, ale e-mail sa nepodarilo odoslať. Zopakujte odoslanie prihlasovacích údajov.",
+      }, { status: 502 });
+    }
 
     await createAuditLogEntry("CREDENTIALS_SENT", `admin:${session.email}`, {
       message: `Boli vygenerované a odoslané prihlasovacie údaje pre vlastníka ${owner.name} (${loginEmail}) bytu č. ${unit.no}.`,

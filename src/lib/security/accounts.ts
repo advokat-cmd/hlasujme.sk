@@ -1,5 +1,22 @@
 export type AccountRole = "superadmin" | "admin" | "vlastnik";
 
+export function isAccountRole(role: unknown): role is AccountRole {
+  return role === "superadmin" || role === "admin" || role === "vlastnik";
+}
+
+export function hasAdminRole(role: unknown): boolean {
+  return role === "superadmin" || role === "admin";
+}
+
+export function hasBuildingAccess(
+  role: unknown,
+  buildingId: string,
+  ownerBuildingId: string | null = null,
+): boolean {
+  if (hasAdminRole(role)) return true;
+  return role === "vlastnik" && !!ownerBuildingId && ownerBuildingId === buildingId;
+}
+
 interface Actor { adminId: string; role: string }
 interface Target { id: string; role: string }
 
@@ -16,8 +33,8 @@ export function requestedLinkedAccountRole(
 }
 
 export function assertAccountMutationAllowed(actor: Actor, target: Target | null, requestedRole: string): void {
-  const roles: AccountRole[] = ["superadmin", "admin", "vlastnik"];
-  if (!roles.includes(requestedRole as AccountRole)) throw new Error("Neplatná rola účtu.");
+  if (!hasAdminRole(actor.role)) throw new Error("Účty môže spravovať iba administrátor.");
+  if (!isAccountRole(requestedRole)) throw new Error("Neplatná rola účtu.");
   if (target?.role === "superadmin" && actor.role !== "superadmin") {
     throw new Error("Účet superadmina môže meniť iba superadmin.");
   }

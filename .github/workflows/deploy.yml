@@ -80,7 +80,10 @@ jobs:
             git -c safe.directory="$SOURCE_DIR" fetch origin main
             git -c safe.directory="$SOURCE_DIR" checkout main
             git -c safe.directory="$SOURCE_DIR" reset --hard origin/main
-            RELEASE_SHA="$(git -c safe.directory="$SOURCE_DIR" rev-parse origin/main)"
+            # Deploy the reviewed commit that triggered this workflow, even if
+            # another push reaches main while this job is waiting in the queue.
+            RELEASE_SHA="${{ github.sha }}"
+            git -c safe.directory="$SOURCE_DIR" cat-file -e "$RELEASE_SHA^{commit}"
             RELEASE_DIR="$RELEASES_DIR/$RELEASE_SHA-$(date -u +%Y%m%dT%H%M%SZ)"
             git -c safe.directory="$SOURCE_DIR" worktree add --detach "$RELEASE_DIR" "$RELEASE_SHA"
             install -m 600 "$SOURCE_DIR/.env" "$RELEASE_DIR/.env"

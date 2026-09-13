@@ -13,6 +13,10 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
 
   // Bypass sending in development if API key is a dummy or missing
   if (!apiKey || apiKey.startsWith("re_mock_") || apiKey.startsWith("pm_mock_")) {
+    if (process.env.NODE_ENV === "production") {
+      console.error("[Email Service] Production email is not configured; message was not sent.");
+      return false;
+    }
     console.log(`[Email Service] MOCK mode — email to ${to} not sent (no API key configured).`);
     return true;
   }
@@ -72,8 +76,6 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
 }
 
 // Templates helper
-const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-
 export function applyEmailStyles(html: string): string {
   // 1. Wrap the entire content in the main container style
   let styled = `<div style="font-family: sans-serif; color: #1B2330; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #E5DFD3; border-radius: 12px; background: #F4F1EA;">${html}</div>`;

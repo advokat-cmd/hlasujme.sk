@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test tests/**/*.test.ts",
-    "test:integration": "tsx --test tests/integration/**/*.test.ts",
+    "test:integration": "tsx --test --test-concurrency=1 tests/integration/*.test.ts",
     "maintenance:purge-test-data": "tsx scripts/purge-test-data.ts",
     "maintenance:purge-empty-units": "tsx scripts/purge-empty-units.ts",
     "maintenance:import-register": "tsx scripts/import-register.ts",

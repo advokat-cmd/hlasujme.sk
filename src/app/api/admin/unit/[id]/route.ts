@@ -7,6 +7,7 @@ import * as argon2 from "argon2";
 import { validateNewPassword, validateOptionalEmail, validateOwners, type NormalizedOwner } from "@/lib/security/input";
 import { assertAccountMutationAllowed, assertLinkedAccountDeletionAllowed, requestedLinkedAccountRole } from "@/lib/security/accounts";
 import { didLoginEmailChange, synchronizeSingleOwnerEmail } from "@/lib/unitEmails";
+import { assertNoRunningPoll, electorateChanged, lockBuilding, PollConflict } from "@/lib/pollLifecycle";
 
 export async function PUT(
   request: Request,
@@ -42,6 +43,9 @@ export async function PUT(
     try {
       unitEmail = validateOptionalEmail(email, "E-mail jednotky");
       owners = validateOwners(body.owners, coMode);
+      if (owners.some(owner => owner.id && !existingUnit.owners.some(existing => existing.id === owner.id))) {
+        throw new Error("Vlastník nepatrí k upravovanej jednotke.");
+      }
       const synchronized = synchronizeSingleOwnerEmail(coMode, unitEmail, owners);
       unitEmail = synchronized.unitEmail;
       owners = synchronized.owners;
@@ -84,11 +88,15 @@ export async function PUT(
 
     // Perform database transaction for unit update + owners sync
     const updatedUnit = await db.$transaction(async (tx) => {
+      await lockBuilding(tx, existingUnit.buildingId);
       const currentUnit = await tx.unit.findUnique({
         where: { id: unitId },
         include: { owners: { include: { admins: true } } },
       });
       if (!currentUnit) throw new Error("Jednotka bola počas úpravy odstránená.");
+      if (electorateChanged(currentUnit, { no: no.trim(), type, coMode, owners })) {
+        await assertNoRunningPoll(tx, currentUnit.buildingId);
+      }
 
       const payloadOwnerIds = new Set(owners.map((owner) => owner.id).filter(Boolean));
       const ownersToDelete = currentUnit.owners.filter((owner) => !payloadOwnerIds.has(owner.id));
@@ -246,10 +254,11 @@ export async function PUT(
         ...unit,
         owners: updatedOwners
       };
-    }, { isolationLevel: "Serializable" });
+    }, { isolationLevel: "ReadCommitted" });
 
     return NextResponse.json({ success: true, unit: updatedUnit });
   } catch (err) {
+    if (err instanceof PollConflict) return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("Unit update error:", err);
     return NextResponse.json({ error: "Chyba pri ukladaní údajov jednotky." }, { status: 500 });
   }

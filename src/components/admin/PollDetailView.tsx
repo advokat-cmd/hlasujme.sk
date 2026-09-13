@@ -14,6 +14,7 @@ import { VOTE_STYLE } from "../ui/Pill";
 import { CloseModal } from "./CloseModal";
 import { sanitizeEmailPreview } from "@/lib/security/html";
 import { hasSealedProtocol } from "@/lib/protocolAvailability";
+import { allowedPollTab, canManagePoll, pollStatusLabel } from "@/lib/pollPresentation";
 
 interface ProtocolEmailLog {
   id: string;
@@ -22,6 +23,9 @@ interface ProtocolEmailLog {
 }
 
 interface PollDetailViewProps {
+  buildingName: string;
+  eligibleUnitsCount: number | null;
+  archiveNotice?: string;
   poll: {
     id: string;
     title: string;
@@ -73,7 +77,7 @@ interface PollDetailViewProps {
       disputed: boolean;
       note: string | null;
     }>;
-    recipients: Array<{ name: string; email: string | null; sentAt?: string | null }>;
+    recipients: Array<{ name: string; email: string | null; ownerId?: string | null; voted?: boolean; sentAt?: string | null }>;
   }>;
   emailStats: {
     eligibleEmailsCount: number;
@@ -87,6 +91,9 @@ interface PollDetailViewProps {
 }
 
 export const PollDetailView: React.FC<PollDetailViewProps> = ({
+  buildingName,
+  eligibleUnitsCount,
+  archiveNotice,
   poll,
   questions,
   unitVotesList,
@@ -95,6 +102,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   emailTemplates,
 }) => {
   const router = useRouter();
+  const canManage = canManagePoll(userRole);
   const isMobile = useNarrow(600);
   const [tab, setTab] = useState("results");
 
@@ -102,11 +110,9 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const queryTab = params.get("tab");
-      if (queryTab && ["results", "units", "emails", "protocol", "documents"].includes(queryTab)) {
-        queueMicrotask(() => setTab(queryTab));
-      }
+      queueMicrotask(() => setTab(allowedPollTab(userRole, queryTab)));
     }
-  }, []);
+  }, [userRole]);
 
   const [sendingProtocol, setSendingProtocol] = useState(false);
   const [protocolError, setProtocolError] = useState("");
@@ -159,7 +165,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   };
 
   const handleTabChange = (newTab: string) => {
-    setTab(newTab);
+    setTab(allowedPollTab(userRole, newTab));
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
       url.searchParams.set("tab", newTab);
@@ -175,10 +181,26 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const [loadingFiles, setLoadingFiles] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [uploadQuestion, setUploadQuestion] = useState("");
+  const [activating, setActivating] = useState(false);
+  const activateDraft = async () => {
+    if (activating) return;
+    setActivating(true);
+    try {
+      const response = await fetch(`/api/admin/poll/${poll.id}/activate`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) alert(data.error || "Spustenie hlasovania zlyhalo.");
+      else {
+        if (data.failedCount > 0) alert(`${data.failedCount} pozvánok sa nepodarilo odoslať. Skontrolujte zoznam príjemcov.`);
+        router.refresh();
+      }
+    } catch { alert("Chyba spojenia pri spúšťaní hlasovania."); }
+    finally { setActivating(false); }
+  };
 
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
 
-  const handleResendEmail = async (email: string, unitNo: string) => {
+  const handleResendEmail = async (email: string, unitNo: string, ownerId?: string | null) => {
     if (!email) return;
     const confirmSend = confirm(`Naozaj chcete znova odoslať pozvánku na e-mail ${email}?`);
     if (!confirmSend) return;
@@ -188,7 +210,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       const res = await fetch(`/api/admin/poll/${poll.id}/resend`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, unitNo })
+        body: JSON.stringify({ email, unitNo, ownerId })
       });
       const data = await res.json();
       if (res.ok) {
@@ -226,7 +248,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const disputedUnitsList = unitVotesList.filter((u) => u.disputed);
   const disputedUnitsCount = disputedUnitsList.length;
 
-  const tabs = userRole === "vlastnik"
+  const tabs = !canManage
     ? [
         { id: "results", label: "Otázky a výsledky", icon: "scale" },
         { id: "protocol", label: "Zápisnica", icon: "paper" },
@@ -247,7 +269,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
     return true;
   });
 
-  const formattedEnd = new Date(poll.endAt).toLocaleString("sk-SK", {
+  const formattedEnd = new Date(poll.endAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
     day: "numeric",
     month: "numeric",
     year: "numeric",
@@ -267,7 +289,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
     const formattedSubject = template.subject
       .replace(/{pollTitle}/g, poll.title)
-      .replace(/{buildingShort}/g, "Björnsonova 3");
+      .replace(/{buildingShort}/g, buildingName);
 
     const answersListHtml = `
       <li style="margin-bottom: 6px;">
@@ -282,8 +304,8 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
     const bodyHtml = template.body
       .replace(/{ownerName}/g, "[Meno vlastníka]")
-      .replace(/{buildingName}/g, "Björnsonova 3")
-      .replace(/{buildingShort}/g, "Björnsonova 3")
+      .replace(/{buildingName}/g, buildingName)
+      .replace(/{buildingShort}/g, buildingName)
       .replace(/{pollTitle}/g, poll.title)
       .replace(/{pollReason}/g, poll.reason || "Bežná údržba")
       .replace(/{endFormatted}/g, formattedEnd)
@@ -323,14 +345,14 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
   const emailCards = [
     {
       t: "Pozvánka na hlasovanie",
-      d: `Odoslané pri spustení — osobný link každému vlastníkovi`,
+      d: "Pozvánky sa odosielajú pri spustení. Vytvorený odkaz sám nepotvrdzuje doručenie e-mailu.",
       n: emailStats.eligibleEmailsCount,
-      s: "sent",
+      s: "unknown",
       icon: "send" as const,
       ...getEmailPreview("invitation", `Pozvánka na hlasovanie: ${poll.title}`, (
         <div>
           <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-          <p>v bytovom dome <strong>Björnsonova 3</strong> bolo vyhlásené elektronické hlasovanie:</p>
+          <p>v bytovom dome <strong>{buildingName}</strong> bolo vyhlásené elektronické hlasovanie:</p>
           <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
             <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
             <p style={{ margin: "0 0 4px", color: "var(--ink-soft)", fontSize: "12px" }}><strong>Dôvod:</strong> {poll.reason}</p>
@@ -349,15 +371,15 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       ))
     },
     {
-      t: "Pripomienka (48 h pred koncom)",
-      d: "Naplánované pred uzávierkou — odosiela sa iba nehlasujúcim",
+      t: "Pripomienka nehlasujúcim",
+      d: "Automatické pripomienky nie sú nastavené. Pozvánku môžete opätovne odoslať ručne pri príjemcovi.",
       n: emailStats.unvotedEmailsCount,
-      s: "scheduled",
+      s: "manual",
       icon: "clock" as const,
       ...getEmailPreview("reminder", `UPOZORNENIE: Pripomienka k hlasovaniu: ${poll.title}`, (
         <div>
           <p>Vážený vlastník <strong>[Meno vlastníka]</strong>,</p>
-          <p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>Björnsonova 3</strong>, ktoré končí o 48 hodín:</p>
+          <p>pripomíname Vám prebiehajúce elektronické hlasovanie v dome <strong>{buildingName}</strong>, ktoré končí o 48 hodín:</p>
           <div style={{ background: "var(--paper-2)", padding: "12px 14px", borderRadius: 8, border: "1px solid var(--line)", margin: "12px 0" }}>
             <h4 style={{ margin: "0 0 6px", color: "var(--primary)", fontSize: "14px" }}>{poll.title}</h4>
             <p style={{ margin: 0, color: "var(--ink-soft)", fontSize: "12px" }}><strong>Koniec hlasovania:</strong> do {formattedEnd}</p>
@@ -395,15 +417,15 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
               </li>
             </ul>
           </div>
-          <p>Váš hlas bol bezpečne zaznamenaný a zašifrovaný v auditnom logu.</p>
+          <p>Váš hlas bol zaznamenaný a jeho odovzdanie je evidované v auditnom logu.</p>
         </div>
       ))
     },
     {
       t: "Výsledok hlasovania",
-      d: "Odosiela sa po overení a uzavretí hlasovania administrátorom",
-      n: emailStats.eligibleEmailsCount,
-      s: poll.status === "closed" ? "sent" : "pending",
+      d: "Odosiela sa ručne tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica.",
+      n: poll.protocolEmailLogs?.length || 0,
+      s: poll.protocolEmailLogs?.length ? "sent" : "pending",
       icon: "paper" as const,
       ...getEmailPreview("protocol", `Výsledky hlasovania: ${poll.title}`, (
         <div>
@@ -424,8 +446,8 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
       ))
     }
   ];
-  const formattedAnnounced = new Date(poll.announcedAt).toLocaleDateString("sk-SK");
-  const formattedStart = new Date(poll.startAt).toLocaleString("sk-SK", {
+  const formattedAnnounced = new Date(poll.announcedAt).toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" });
+  const formattedStart = new Date(poll.startAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
     day: "numeric",
     month: "numeric",
     year: "numeric",
@@ -435,7 +457,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
   const getStatusPill = (status: "approved" | "rejected" | "short") => {
     const map = {
-      approved: { label: "Schválené", tone: "success", icon: "checkCircle" },
+      approved: { label: poll.status === "closed" ? "Schválené" : "Aktuálne dosiahnutá väčšina", tone: "success", icon: "checkCircle" },
       rejected: { label: "Neschválené", tone: "danger", icon: "xCircle" },
       short: { label: "Zatiaľ nedosiahnutá väčšina", tone: "accent", icon: "clock" },
     };
@@ -516,20 +538,22 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
   return (
     <div className="admin-page-container">
-      <PageHead eyebrow={`Bytový dom Björnsonova 3 · ${poll.status === "active" ? "prebieha" : "ukončené"}`} title={poll.title}>
-        {userRole !== "vlastnik" && (
+      <PageHead eyebrow={`${buildingName} · ${pollStatusLabel(poll.status, poll.startAt, poll.endAt)}`} title={poll.title}>
+        {canManage && (
           <div style={{ display: "flex", gap: 8 }}>
-            {poll.status === "active" && (
+            {poll.status === "draft" && <Btn kind="primary" icon="send" disabled={activating} onClick={activateDraft}>{activating ? "Spúšťam..." : "Spustiť a odoslať pozvánky"}</Btn>}
+            {(poll.status === "active" || poll.status === "closing") && (
               <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
                 Uzavrieť hlasovanie
               </Btn>
             )}
-            <Btn kind="ghost" icon="x" style={{ color: "var(--disagree)" }} onClick={handleDeletePoll}>
-              Vymazať hlasovanie
-            </Btn>
+            {poll.status === "draft" && <Btn kind="ghost" icon="x" style={{ color: "var(--disagree)" }} onClick={handleDeletePoll}>
+              Vymazať návrh
+            </Btn>}
           </div>
         )}
       </PageHead>
+      {archiveNotice && <Card style={{ marginBottom: 18 }}>{archiveNotice}</Card>}
 
       {/* Meta Strip */}
       <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 26px", marginBottom: 24, fontSize: "12.5px" }}>
@@ -553,7 +577,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "var(--ink-soft)" }}>
           <Ic name="building" size={14} style={{ color: "var(--ink-faint)" }} />
           <span style={{ color: "var(--ink-faint)", fontWeight: 600 }}>Oprávnené hlasy:</span>
-          <span style={{ color: "var(--ink)", fontWeight: 600 }}>{unitVotesList.length} jednotiek</span>
+          <span style={{ color: "var(--ink)", fontWeight: 600 }}>{eligibleUnitsCount === null ? "podľa zapečatenej zápisnice" : `${eligibleUnitsCount} jednotiek`}</span>
         </span>
       </div>
 
@@ -889,7 +913,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         </div>
       )}
 
-      {tab === "units" && (
+      {canManage && tab === "units" && (
         <div>
           <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center", flexWrap: "wrap" }}>
             {[
@@ -977,7 +1001,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                   <div style={{ fontSize: "11.5px", color: "var(--ink-soft)" }}>
                     {row.voted ? (
                       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-                        {row.at ? new Date(row.at).toLocaleString("sk-SK", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
+                        {row.at ? new Date(row.at).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava", day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}
                         {row.changed && <Pill tone="neutral" size="sm">zmenené</Pill>}
                       </span>
                     ) : (
@@ -991,7 +1015,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         </div>
       )}
 
-      {tab === "emails" && (
+      {canManage && tab === "emails" && (
         <div>
           <div
             style={{
@@ -1016,14 +1040,14 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           
           <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 24 }}>
             {emailCards.map((m, i) => {
-              const sTone: Record<string, string> = { sent: "success", scheduled: "primary", auto: "neutral", pending: "neutral" };
-              const sLabel: Record<string, string> = { sent: "odoslané", scheduled: "naplánované", auto: "automatické", pending: "čaká" };
+              const sTone: Record<string, string> = { sent: "success", manual: "neutral", unknown: "neutral", auto: "neutral", pending: "neutral" };
+              const sLabel: Record<string, string> = { sent: "evidované odoslania", manual: "ručne", unknown: "doručenie neoverené", auto: "automatické", pending: "čaká" };
               const isExpanded = expandedEmailCard === i;
 
               // Helper for formatting date
               const formatDateStr = (dateStr: string | Date) => {
                 const d = new Date(dateStr);
-                return d.toLocaleString("sk-SK", {
+                return d.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
                   day: "numeric",
                   month: "numeric",
                   year: "numeric",
@@ -1095,7 +1119,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         {/* Ľavý stĺpec: Zoznam príjemcov */}
                         <div style={{ display: "flex", flexDirection: "column" }}>
                           <div style={{ fontSize: 11, fontWeight: 700, color: "var(--ink-faint)", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10 }}>
-                            Zoznam príjemcov a stav doručenia
+                            Príjemcovia a evidencia odkazov
                           </div>
                           
                           <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 300, overflowY: "auto", paddingRight: 8 }}>
@@ -1103,6 +1127,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                               const list = unitVotesList.flatMap(u =>
                                 u.recipients.map(r => ({
                                   name: r.name,
+                                  ownerId: r.ownerId,
                                   email: r.email,
                                   unitNo: u.unitNo,
                                   sentAt: r.sentAt,
@@ -1119,11 +1144,11 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                                     {item.email ? (
                                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                         <span style={{ color: "var(--agree)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                          {isResent ? `Znova odoslané ${formatDateStr(item.sentAt!)}` : `Odoslané ${formatDateStr(poll.announcedAt)}`}
+                                          {item.sentAt ? `Odkaz vytvorený ${formatDateStr(item.sentAt)}` : "Odkaz zatiaľ nevytvorený"}
                                         </span>
                                         <button
-                                          onClick={() => handleResendEmail(item.email!, item.unitNo)}
-                                          disabled={resendingEmail === `${item.unitNo}-${item.email}`}
+                                          onClick={() => handleResendEmail(item.email!, item.unitNo, item.ownerId)}
+                                          disabled={poll.status !== "active" || Date.now() > new Date(poll.endAt).getTime() || resendingEmail === `${item.unitNo}-${item.email}`}
                                           title="znova odoslať"
                                           style={{
                                             background: "none",
@@ -1159,10 +1184,10 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
                             {i === 1 && (() => {
                               const list = unitVotesList
-                                .filter(u => !u.voted)
                                 .flatMap(u =>
-                                  u.recipients.map(r => ({
+                                  u.recipients.filter(r => !(r.voted ?? u.voted)).map(r => ({
                                     name: r.name,
+                                  ownerId: r.ownerId,
                                     email: r.email,
                                     unitNo: u.unitNo,
                                     sentAt: r.sentAt,
@@ -1182,11 +1207,11 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                                     {item.email ? (
                                       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                                         <span style={{ color: isResent ? "var(--agree)" : "var(--primary)", fontWeight: 500, fontSize: 12, whiteSpace: "nowrap" }}>
-                                          {isResent ? `Znova odoslané ${formatDateStr(item.sentAt!)}` : `Naplánované (48 h pred koncom)`}
+                                          {"Pripomienka sa neposiela automaticky"}
                                         </span>
                                         <button
-                                          onClick={() => handleResendEmail(item.email!, item.unitNo)}
-                                          disabled={resendingEmail === `${item.unitNo}-${item.email}`}
+                                          onClick={() => handleResendEmail(item.email!, item.unitNo, item.ownerId)}
+                                          disabled={poll.status !== "active" || Date.now() > new Date(poll.endAt).getTime() || resendingEmail === `${item.unitNo}-${item.email}`}
                                           title="znova odoslať"
                                           style={{
                                             background: "none",
@@ -1226,6 +1251,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                                 .flatMap(u =>
                                   u.recipients.map(r => ({
                                     name: r.name,
+                                  ownerId: r.ownerId,
                                     email: r.email,
                                     unitNo: u.unitNo,
                                     votedAt: u.at!,
@@ -1257,6 +1283,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                               const list = unitVotesList.flatMap(u =>
                                 u.recipients.map(r => ({
                                   name: r.name,
+                                  ownerId: r.ownerId,
                                   email: r.email,
                                   unitNo: u.unitNo,
                                 }))
@@ -1264,7 +1291,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                               if (poll.status !== "closed") {
                                 return (
                                   <div style={{ fontSize: 13, color: "var(--ink-soft)" }}>
-                                    Výsledky budú automaticky odoslané všetkým {list.filter(item => item.email).length} príjemcom po overení a uzavretí hlasovania.
+                                    Výsledky po uzavretí odošlete ručne zo záložky Zápisnica. Evidované odoslania nájdete v jej histórii.
                                   </div>
                                 );
                               }
@@ -1362,7 +1389,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
 
       {tab === "protocol" && (
         <div>
-          {poll.status === "active" ? (
+          {poll.status !== "closed" ? (
             <Card style={{ marginBottom: 20 }}>
               <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
                 <div
@@ -1382,16 +1409,16 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 </div>
                 <div style={{ flex: "1 1 260px", minWidth: 0 }}>
                   <h3 style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, margin: "0 0 5px" }}>
-                    Hlasovanie ešte prebieha
+                    {pollStatusLabel(poll.status, poll.startAt, poll.endAt)}
                   </h3>
                   <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: 0, lineHeight: 1.5, maxWidth: 560 }}>
                     Zápisnicu je možné vygenerovať až po skončení termínu alebo po manuálnom uzavretí hlasovania. Do
                     skončenia termínu môžu vlastníci svoje odpovede meniť.
                   </p>
                 </div>
-                <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
+                {canManage && (poll.status === "active" || poll.status === "closing") && <Btn kind="gold" icon="lock" onClick={() => setClosing(true)}>
                   Uzavrieť teraz
-                </Btn>
+                </Btn>}
               </div>
             </Card>
           ) : (
@@ -1444,7 +1471,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                       </Btn>
                     </a>
                   )}
-                  {hasSealedProtocol(poll.sealedResult) && (
+                  {canManage && hasSealedProtocol(poll.sealedResult) && (
                     <Btn
                       kind="primary"
                       icon="send"
@@ -1460,7 +1487,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           )}
 
           {/* Sent Protocol Email Logs */}
-          {poll.status === "closed" && (
+          {canManage && poll.status === "closed" && (
             <div style={{ marginTop: 24, marginBottom: 24 }}>
               <h4 style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 600, margin: "0 0 10px", color: "var(--ink)" }}>
                 História odoslania zápisnice
@@ -1479,7 +1506,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         <tr key={log.id} style={{ borderBottom: "1px solid var(--line)" }}>
                           <td style={{ padding: "10px 14px", color: "var(--ink)", fontWeight: 500 }}>{log.email}</td>
                           <td style={{ padding: "10px 14px", color: "var(--ink-soft)" }}>
-                            {new Date(log.sentAt).toLocaleString("sk-SK", {
+                            {new Date(log.sentAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
                               day: "numeric",
                               month: "numeric",
                               year: "numeric",
@@ -1568,11 +1595,15 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                 <p style={{ margin: 0, fontSize: 13.5, color: "var(--ink-soft)", lineHeight: 1.4 }}>
                   {userRole === "vlastnik"
                     ? "Tieto dokumenty sú priložené k tomuto hlasovaniu. Môžete si ich kedykoľvek stiahnuť a prezerať."
-                    : "Tieto dokumenty sú bezpečne uložené na serveri. Môžete sem nahrať nové podklady, ktoré si vlastníci a administrátori môžu stiahnuť a prezerať."}
+                    : "Podklady sú uložené na serveri. Nové dokumenty možno pridať počas prípravy návrhu; po spustení hlasovania sa už nemenia."}
                 </p>
               </div>
-              {userRole !== "vlastnik" && (
+              {canManage && poll.status === "draft" && (
                 <div style={{ flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, width: isMobile ? "100%" : "auto" }}>
+                  <select aria-label="Priradiť dokument k otázke" value={uploadQuestion} onChange={(event) => setUploadQuestion(event.target.value)}>
+                    <option value="">Všeobecný podklad</option>
+                    {questions.map((question) => <option key={question.no} value={question.no}>Otázka {question.no}</option>)}
+                  </select>
                   <label style={{ display: "inline-block", cursor: "pointer", width: "100%" }}>
                     <input
                       type="file"
@@ -1587,6 +1618,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
                         
                         const formData = new FormData();
                         formData.append("file", file);
+                        if (uploadQuestion) formData.append("questionNo", uploadQuestion);
                         
                         try {
                           const res = await fetch(`/api/admin/poll/${poll.id}/upload`, {
@@ -1665,7 +1697,7 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
         </div>
       )}
 
-      {closing && (
+      {canManage && closing && (
         <CloseModal
           pollId={poll.id}
           pollTitle={poll.title}

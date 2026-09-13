@@ -10,16 +10,18 @@ import { Btn } from "../ui/Button";
 import { FormRow, Input } from "../ui/FormControls";
 
 interface AdminSidebarProps {
+  buildingName: string;
   user: {
     name: string;
     email: string;
     unitId: string | null;
+    unitNo?: string | null;
     role: string;
   };
   activePollId: string | null;
 }
 
-export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }) => {
+export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId, buildingName }) => {
   const pathname = usePathname();
   const router = useRouter();
   const narrow = useNarrow(860);
@@ -42,8 +44,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
       setChangePasswordError("Prosím, zadajte nové heslo.");
       return;
     }
-    if (newPassword.trim().length < 6) {
-      setChangePasswordError("Nové heslo musí mať aspoň 6 znakov.");
+    if (newPassword.length < 12 || newPassword.length > 4096) {
+      setChangePasswordError("Nové heslo musí mať 12 až 4096 znakov.");
       return;
     }
     if (newPassword !== newPasswordConfirm) {
@@ -64,11 +66,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
       if (!res.ok) {
         setChangePasswordError(data.error || "Zmena hesla zlyhala.");
       } else {
-        alert("Vaše heslo bolo úspešne zmenené.");
+        alert("Vaše heslo bolo úspešne zmenené. Prihláste sa novým heslom.");
         setChangePasswordOpen(false);
         setOldPassword("");
         setNewPassword("");
         setNewPasswordConfirm("");
+        router.push("/admin/login");
+        router.refresh();
       }
     } catch (err) {
       setChangePasswordError("Chyba sieťového pripojenia.");
@@ -121,8 +125,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
   const roleLabel = user.role === "superadmin"
     ? "Superadmin"
     : user.role === "admin"
-      ? (user.unitId ? `Administrátor · byt č. ${user.unitId}` : "Administrátor")
-      : `Vlastník · byt č. ${user.unitId || "—"}`;
+      ? (user.unitNo ? `Administrátor · byt č. ${user.unitNo}` : "Administrátor")
+      : `Vlastník · byt č. ${user.unitNo || "—"}`;
 
   if (narrow) {
     return (
@@ -164,7 +168,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <Ic name="building" size={17} style={{ color: "var(--accent)" }} />
             <span style={{ fontFamily: "var(--serif)", fontSize: 15, fontWeight: 600 }}>
-              Björnsonova 3
+              {buildingName}
             </span>
           </div>
         </header>
@@ -313,7 +317,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
         </div>
         <div>
           <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 600, lineHeight: 1.1 }}>
-            Björnsonova 3
+            {buildingName}
           </div>
           <div style={{ fontSize: 11, color: "rgba(232,236,244,.55)", letterSpacing: 0.3 }}>
             elektronické hlasovanie
@@ -483,7 +487,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId }
             />
           </FormRow>
 
-          <FormRow label="Nové heslo" hint="Heslo musí mať aspoň 6 znakov.">
+          <FormRow label="Nové heslo" hint="Heslo musí mať aspoň 12 znakov.">
             <Input
               type="password"
               placeholder="Zadajte nové heslo"

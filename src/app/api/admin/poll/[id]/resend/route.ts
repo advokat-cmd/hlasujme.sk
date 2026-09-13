@@ -5,6 +5,9 @@ import { hashToken } from "@/lib/tokens";
 import { sendEmail, getInvitationEmail } from "@/lib/email";
 import crypto from "crypto";
 import { createAuditLogEntry } from "@/lib/hashChain";
+import { validateOptionalEmail } from "@/lib/security/input";
+import { acquirePollLock } from "@/lib/pollLock";
+import { PollConflict } from "@/lib/pollLifecycle";
 
 export async function POST(
   request: Request,
@@ -17,8 +20,17 @@ export async function POST(
     }
 
     const { id: pollId } = await params;
-    const body = await request.json();
-    const { email, unitNo } = body as { email: string; unitNo: string };
+    let email: string;
+    let unitNo: string;
+    let requestedOwnerId: string | undefined;
+    try {
+      const body = await request.json();
+      email = validateOptionalEmail(body?.email);
+      unitNo = typeof body?.unitNo === "string" ? body.unitNo.trim() : "";
+      requestedOwnerId = typeof body?.ownerId === "string" ? body.ownerId : undefined;
+    } catch {
+      return NextResponse.json({ error: "Neplatný e-mail alebo číslo jednotky." }, { status: 400 });
+    }
 
     if (!email || !unitNo) {
       return NextResponse.json({ error: "E-mail a číslo bytu sú povinné." }, { status: 400 });
@@ -32,6 +44,9 @@ export async function POST(
     if (!poll) {
       return NextResponse.json({ error: "Hlasovanie nebolo nájdené." }, { status: 404 });
     }
+    if (poll.status !== "active" || poll.endAt < new Date()) {
+      return NextResponse.json({ error: "Pozvánku možno odoslať len k vyhlásenému hlasovaniu pred jeho skončením." }, { status: 409 });
+    }
 
     const unit = await db.unit.findFirst({
       where: { buildingId: poll.buildingId, no: unitNo },
@@ -41,19 +56,23 @@ export async function POST(
     if (!unit) {
       return NextResponse.json({ error: "Byt nebol nájdený." }, { status: 404 });
     }
+    if (unit.status !== "active") return NextResponse.json({ error: "Jednotka nie je aktívna." }, { status: 409 });
 
     let ownerId: string | null = null;
     let ownerName = "vlastník";
 
     if (unit.coMode === "internal") {
       // Find the specific owner by email
-      const owner = unit.owners.find(o => o.email?.trim().toLowerCase() === email.trim().toLowerCase());
+      const matches = unit.owners.filter(o => (o.email || unit.email)?.trim().toLowerCase() === email && (!requestedOwnerId || o.id === requestedOwnerId));
+      if (matches.length > 1) return NextResponse.json({ error: "Vyberte konkrétneho spoluvlastníka pre spoločnú e-mailovú adresu." }, { status: 409 });
+      const owner = matches[0];
       if (!owner) {
         return NextResponse.json({ error: "Vlastník s týmto e-mailom nebol nájdený." }, { status: 404 });
       }
       ownerId = owner.id;
       ownerName = owner.name;
     } else {
+      if (unit.email?.trim().toLowerCase() !== email) return NextResponse.json({ error: "Pozvánku možno poslať len na e-mail uvedený v registri jednotky." }, { status: 400 });
       if (unit.coMode === "rep" && unit.actingPerson) {
         ownerName = unit.actingPerson;
       } else if (unit.owners.length > 0) {
@@ -66,9 +85,12 @@ export async function POST(
     const tokenHash = hashToken(plainToken);
 
     // Perform database operations in transaction
-    await db.$transaction(async (tx) => {
-      // Delete old token if exists
-      await tx.voteToken.deleteMany({
+    const replacement = await db.$transaction(async (tx) => {
+      await acquirePollLock(tx, pollId);
+      const current = await tx.poll.findUnique({ where: { id: pollId } });
+      if (!current || current.status !== "active" || current.endAt < new Date()) throw new PollConflict("Hlasovanie už nie je otvorené na odoslanie pozvánky.");
+      // Preserve existing usable links until the replacement email is accepted.
+      const previous = await tx.voteToken.findMany({
         where: {
           pollId,
           unitId: unit.id,
@@ -77,7 +99,7 @@ export async function POST(
       });
 
       // Create new token
-      await tx.voteToken.create({
+      const created = await tx.voteToken.create({
         data: {
           pollId,
           unitId: unit.id,
@@ -86,6 +108,7 @@ export async function POST(
           expiresAt: poll.endAt
         }
       });
+      return { createdId: created.id, previousIds: previous.map(token => token.id) };
     });
 
     // Send email invitation
@@ -95,7 +118,8 @@ export async function POST(
       month: "numeric",
       year: "numeric",
       hour: "2-digit",
-      minute: "2-digit"
+      minute: "2-digit",
+      timeZone: "Europe/Bratislava"
     });
 
     const magicLink = `${baseUrl}/hlasuj/${plainToken}`;
@@ -115,8 +139,16 @@ export async function POST(
     });
 
     if (!sent) {
+      await db.$transaction(async tx => {
+        await acquirePollLock(tx, pollId);
+        await tx.voteToken.deleteMany({ where: { id: replacement.createdId } });
+      });
       return NextResponse.json({ error: "E-mail sa nepodarilo odoslať." }, { status: 500 });
     }
+    await db.$transaction(async tx => {
+      await acquirePollLock(tx, pollId);
+      await tx.voteToken.deleteMany({ where: { id: { in: replacement.previousIds } } });
+    });
 
     await createAuditLogEntry("VOTE_TOKEN_RESENT", `admin:${session.email}`, {
       message: `Znova odoslaná pozvánka pre vlastníka ${ownerName} (Byt č. ${unit.no}, e-mail: ${email}).`,
@@ -127,6 +159,7 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof PollConflict) return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("Resend token error:", err);
     return NextResponse.json({ error: "Interná chyba servera." }, { status: 500 });
   }

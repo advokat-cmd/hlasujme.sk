@@ -56,7 +56,8 @@ export async function GET(
     return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+        "Content-Disposition": `attachment; filename="${asciiFileName.replace(/["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        "Cache-Control": "private, no-store",
       }
     });
   } catch (err) {

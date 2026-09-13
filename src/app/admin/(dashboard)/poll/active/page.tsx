@@ -10,6 +10,7 @@ import { Ic } from "@/components/ui/Icons";
 import { Pill } from "@/components/ui/Pill";
 
 import { getAdminSession } from "@/lib/session";
+import { pollStatusLabel } from "@/lib/pollPresentation";
 
 export const revalidate = 0;
 
@@ -24,7 +25,7 @@ export default async function ActivePollPage() {
   const activePolls = await db.poll.findMany({
     where: { 
       buildingId: building.id, 
-      status: { in: [PollStatus.active, PollStatus.draft] } 
+      status: { in: [PollStatus.active, PollStatus.draft, PollStatus.closing] }
     },
     orderBy: { createdAt: "desc" },
   });
@@ -72,13 +73,13 @@ export default async function ActivePollPage() {
                       </div>
                     </Link>
                     <div style={{ fontSize: "12px", color: "var(--ink-soft)", marginTop: 2 }}>
-                      Trvanie: {a.startAt.toLocaleString("sk-SK")} – {a.endAt.toLocaleString("sk-SK")} · Vyhlásil: {a.declarer}
+                      Trvanie: {a.startAt.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" })} – {a.endAt.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" })} · Vyhlásil: {a.declarer}
                     </div>
                   </div>
                   
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                     <Pill tone={isActive ? "success" : "neutral"} size="sm">
-                      {isActive ? "prebieha" : "návrh"}
+                      {pollStatusLabel(a.status, a.startAt.toISOString(), a.endAt.toISOString())}
                     </Pill>
                     
                     <Link href={`/admin/poll/${a.id}`} style={{ textDecoration: "none" }}>

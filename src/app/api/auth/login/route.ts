@@ -6,6 +6,7 @@ import { getClientIp } from "@/lib/security/clientIp";
 import { createAuditLogEntry } from "@/lib/hashChain";
 import * as argon2 from "argon2";
 import { validateLoginInput } from "@/lib/security/input";
+import { isAccountRole } from "@/lib/security/accounts";
 
 export async function POST(request: Request) {
   try {
@@ -50,6 +51,10 @@ export async function POST(request: Request) {
         data: { role: "superadmin" }
       });
       finalRole = "superadmin";
+    }
+
+    if (!isAccountRole(finalRole)) {
+      return NextResponse.json({ error: "Účet nemá platné prístupové oprávnenie." }, { status: 403 });
     }
 
     await setAdminSession({

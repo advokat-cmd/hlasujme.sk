@@ -6,7 +6,30 @@ import {
   assertLinkedAccountDeletionAllowed,
   assertOwnerBelongsToUnit,
   requestedLinkedAccountRole,
+  hasBuildingAccess,
+  isAccountRole,
 } from "../src/lib/security/accounts";
+
+test("unknown roles do not become administrators or building readers", () => {
+  for (const role of ["", "owner", "viewer", null, undefined]) {
+    assert.equal(isAccountRole(role), false);
+    assert.equal(hasBuildingAccess(role, "building-a", "building-a"), false);
+  }
+});
+
+test("owners can read only their linked building while administrators can read all", () => {
+  assert.equal(hasBuildingAccess("vlastnik", "building-a", "building-a"), true);
+  assert.equal(hasBuildingAccess("vlastnik", "building-b", "building-a"), false);
+  assert.equal(hasBuildingAccess("vlastnik", "building-a"), false);
+  assert.equal(hasBuildingAccess("admin", "building-b"), true);
+  assert.equal(hasBuildingAccess("superadmin", "building-b"), true);
+});
+
+test("owner and unknown actors cannot change linked accounts", () => {
+  for (const role of ["vlastnik", "viewer", ""]) {
+    assert.throws(() => assertAccountMutationAllowed({ role, adminId: "actor" }, { role: "vlastnik", id: "other" }, "vlastnik"), /administrátor/i);
+  }
+});
 
 test("normal admin cannot mutate superadmin", () => {
   assert.throws(

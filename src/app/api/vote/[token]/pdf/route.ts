@@ -35,10 +35,14 @@ export async function GET(
     }
 
     const { poll, unit } = tokenRecord;
+    if (unit.buildingId !== poll.buildingId) {
+      return NextResponse.json({ error: "Neplatný odkaz na hlasovanie." }, { status: 404 });
+    }
 
     let owner = null;
     if (tokenRecord.ownerId) {
       owner = unit.owners.find(o => o.id === tokenRecord.ownerId) || null;
+      if (!owner) return NextResponse.json({ error: "Neplatný odkaz na hlasovanie." }, { status: 404 });
     }
 
     // 2. Fetch voter's latest answers
@@ -130,7 +134,7 @@ export async function GET(
         doc.text(clean("Hlasovací podiel: "), { continued: true }).text(boldClean(`1.00 (celý byt / zástupca)`)); regular();
       }
 
-      doc.text(clean("Čas prijatia: "), { continued: true }).text(boldClean(lastVoteDate!.toLocaleString("sk-SK"))); regular();
+      doc.text(clean("Čas prijatia: "), { continued: true }).text(boldClean(lastVoteDate!.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" }))); regular();
       doc.text(clean("IP adresa: "), { continued: true }).text(boldClean(lastVoteIp)); regular();
       doc.moveDown(1.5);
 
@@ -185,11 +189,13 @@ export async function GET(
     });
 
     const fileName = `potvrdenie_hlasovania_byt_${unit.no}.pdf`;
+    const asciiFileName = fileName.normalize("NFD").replace(/[^a-zA-Z0-9._-]/g, "_");
 
     return new Response(new Uint8Array(pdfBuffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${fileName}"`
+        "Content-Disposition": `attachment; filename="${asciiFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+        "Cache-Control": "private, no-store",
       }
     });
 

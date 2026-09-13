@@ -1,6 +1,8 @@
 import PDFDocument from "pdfkit";
 import { computePollResults, EffectiveVote } from "./engine";
 import { setupPdfFonts } from "./pdfFonts";
+import type { Prisma } from "@prisma/client";
+import { createSealedSnapshot, type SealedPollSnapshot } from "./seal";
 
 export interface SealedQuestionResult {
   questionNo: number;
@@ -18,6 +20,7 @@ export interface SealedQuestionResult {
 export interface SealedProtocol {
   buffer: Buffer;
   results: SealedQuestionResult[];
+  snapshot: SealedPollSnapshot;
 }
 
 interface QuestionResultDetails {
@@ -47,6 +50,13 @@ interface UnitVoteDetails {
 
 const EMPTY_EFFECTIVE: EffectiveVote = { answer: null, disputed: false, note: null };
 
+/** Reserve at least 90 points per question so even the longest answer fits. */
+export function createAnnexQuestionGroups<T>(questions: T[]): T[][] {
+  const groups: T[][] = [];
+  for (let index = 0; index < questions.length; index += 3) groups.push(questions.slice(index, index + 3));
+  return groups;
+}
+
 function mapAnswerLabel(eff: EffectiveVote): string {
   if (eff.disputed) return "Sporný";
   if (eff.answer === "agree") return "ZA";
@@ -59,12 +69,14 @@ function mapAnswerLabel(eff: EffectiveVote): string {
  * Generates the sealed protocol PDF together with the machine-readable results.
  * All tallies are computed in a single batched pass (constant query count).
  */
-export async function generateSealedProtocol(pollId: string): Promise<SealedProtocol> {
+export async function generateSealedProtocol(pollId: string, client?: Prisma.TransactionClient): Promise<SealedProtocol> {
   // treatAsClosed: sealing happens before the poll status flips to closed,
   // so undecided questions must resolve as rejected, not "short".
-  const { poll, units, tallies, effectiveVotes } = await computePollResults(pollId, {
+  const pollResults = await computePollResults(pollId, {
     treatAsClosed: true
-  });
+  }, client);
+  const { poll, units, tallies, effectiveVotes } = pollResults;
+  const snapshot = createSealedSnapshot(pollResults);
 
   const building = poll.building;
 
@@ -143,10 +155,10 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
     // Metadata section
     doc.fontSize(11);
     doc.text(t("Vyhlasovateľ: "), { continued: true }).text(bold(poll.declarer)); setRegular();
-    doc.text(t("Začiatok hlasovania: "), { continued: true }).text(bold(poll.startAt.toLocaleString("sk-SK"))); setRegular();
-    doc.text(t("Koniec hlasovania: "), { continued: true }).text(bold(poll.endAt.toLocaleString("sk-SK"))); setRegular();
+    doc.text(t("Začiatok hlasovania: "), { continued: true }).text(bold(poll.startAt.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" }))); setRegular();
+    doc.text(t("Koniec hlasovania: "), { continued: true }).text(bold(poll.endAt.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" }))); setRegular();
     doc.text(t("Status hlasovania: "), { continued: true }).text(bold("Uzavreté a zapečatené")); setRegular();
-    doc.text(t("Zverejnené dňa: "), { continued: true }).text(bold(new Date().toLocaleString("sk-SK"))); setRegular();
+    doc.text(t("Zverejnené dňa: "), { continued: true }).text(bold(new Date(snapshot.sealedAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava" }))); setRegular();
     doc.moveDown(1.5);
 
     doc.fontSize(13);
@@ -191,68 +203,52 @@ export async function generateSealedProtocol(pollId: string): Promise<SealedProt
       doc.moveDown(1.2);
     }
 
-    // Annex: per-unit vote list
-    doc.addPage();
-    doc.fontSize(13);
-    doc.text(bold("PRÍLOHA Č. 1: MENNÝ ZOZNAM HLASOVANIA JEDNOTIEK")); setRegular();
-    doc.moveDown(0.5);
-
-    doc.fontSize(9);
-
-    // Question columns are laid out dynamically — only the questions that
-    // were actually declared for this poll appear in the annex.
-    const questionCount = poll.questions.length;
+    // Annex: at most three question columns per group. Each group repeats all
+    // units, so a longer poll never squeezes or overlaps answers on the page.
+    const questionGroups = createAnnexQuestionGroups(poll.questions.map((question, index) => ({ question, index })));
     const colStartX = 270;
     const colEndX = 540;
-    const colWidth = questionCount > 0 ? (colEndX - colStartX) / questionCount : 0;
-    const colX = (i: number) => colStartX + i * colWidth;
-
-    const drawTableHeader = (y: number): number => {
-      doc.text(bold("Jedn."), 50, y);
-      doc.text(bold("Vlastník / Režim"), 90, y);
-      poll.questions.forEach((q, i) => {
-        doc.text(bold(`Otázka ${q.no}`), colX(i), y);
-      });
-      doc.strokeColor("#E5DFD3").lineWidth(1).moveTo(50, y + 12).lineTo(colEndX, y + 12).stroke();
-      setRegular();
-      return y + 18;
-    };
-
-    let currentY = drawTableHeader(doc.y);
-    const pageBreakY = doc.page.height - doc.page.margins.bottom - 30;
-
-    for (const uv of unitVotes) {
-      if (currentY > pageBreakY) {
+    for (const group of questionGroups) {
+      const colWidth = (colEndX - colStartX) / group.length;
+      const colX = (index: number) => colStartX + index * colWidth;
+      const cell = (width: number) => ({ width, height: 12, ellipsis: true, lineBreak: false });
+      const startAnnexPage = (): number => {
         doc.addPage();
-        currentY = drawTableHeader(50);
-      }
-
-      doc.text(t(uv.no), 50, currentY);
-
-      const truncatedName = uv.ownerName.length > 28 ? uv.ownerName.slice(0, 25) + "..." : uv.ownerName;
-      doc.text(t(`${truncatedName} (${uv.coMode})`), 90, currentY);
-
-      const getChoiceColor = (choice: string) => {
-        if (choice === "ZA") return "#2E7D5B";
-        if (choice === "PROTI") return "#B23A48";
-        if (choice === "Sporný") return "#B07D2B";
-        return "#5C6473";
+        doc.fontSize(13).text(bold("PRÍLOHA Č. 1: MENNÝ ZOZNAM HLASOVANIA JEDNOTIEK"), 50, 50); setRegular();
+        doc.fontSize(10).text(t(`Otázky: ${group.map(({ question }) => question.no).join(", ")}`), 50, doc.y + 5);
+        doc.moveDown(0.5);
+        doc.fontSize(9);
+        const y = doc.y;
+        doc.text(bold("Jedn."), 50, y, cell(35));
+        doc.text(bold("Vlastník / Režim"), 90, y, cell(170));
+        group.forEach(({ question }, index) => {
+          doc.text(bold(`Otázka ${question.no}`), colX(index), y, cell(colWidth - 5));
+        });
+        doc.strokeColor("#E5DFD3").lineWidth(1).moveTo(50, y + 12).lineTo(colEndX, y + 12).stroke();
+        setRegular();
+        return y + 18;
       };
 
-      uv.answers.forEach((answer, i) => {
-        doc.fillColor(getChoiceColor(answer)).text(t(answer), colX(i), currentY);
-      });
-      doc.fillColor("#1B2330");
-
-      doc.strokeColor("#ECE7DC").lineWidth(0.5).moveTo(50, currentY + 10).lineTo(colEndX, currentY + 10).stroke();
-
-      currentY += 16;
+      let currentY = startAnnexPage();
+      for (const unitVote of unitVotes) {
+        if (currentY > doc.page.height - doc.page.margins.bottom - 30) currentY = startAnnexPage();
+        doc.text(t(unitVote.no), 50, currentY, cell(35));
+        doc.text(t(`${unitVote.ownerName} (${unitVote.coMode})`), 90, currentY, cell(170));
+        group.forEach(({ index: answerIndex }, columnIndex) => {
+          const answer = unitVote.answers[answerIndex];
+          const color = answer === "ZA" ? "#2E7D5B" : answer === "PROTI" ? "#B23A48" : answer === "Sporný" ? "#B07D2B" : "#5C6473";
+          doc.fillColor(color).text(t(answer), colX(columnIndex), currentY, cell(colWidth - 5));
+        });
+        doc.fillColor("#1B2330");
+        doc.strokeColor("#ECE7DC").lineWidth(0.5).moveTo(50, currentY + 10).lineTo(colEndX, currentY + 10).stroke();
+        currentY += 16;
+      }
     }
 
     doc.end();
   });
 
-  return { buffer, results: finalResults };
+  return { buffer, results: finalResults, snapshot };
 }
 
 /** Backward-compatible wrapper returning only the PDF buffer. */

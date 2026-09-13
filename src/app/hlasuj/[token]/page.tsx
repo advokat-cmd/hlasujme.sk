@@ -25,7 +25,7 @@ export default async function VoterPage({ params }: PageProps) {
   const { token } = await params;
 
   // 1. Validate the vote token hash
-  const tokenInfo = await validateVoteToken(token);
+  const tokenInfo = await validateVoteToken(token, { allowBeforeStart: true });
 
   if (!tokenInfo) {
     return (
@@ -192,7 +192,10 @@ export default async function VoterPage({ params }: PageProps) {
       kind: q.kind,
       title: q.title,
       text: q.text,
-      attachments: q.attachments,
+      attachments: q.attachments.map((attachment) => {
+        const document = documents.find((item) => attachment === `/api/document/${item.id}`);
+        return document ? `/api/document/${document.id}?token=${encodeURIComponent(token)}` : attachment;
+      }),
     })),
   };
 

@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { createAuditLogEntry } from "@/lib/hashChain";
+import { createAuditLogEntryWithTx } from "@/lib/hashChain";
+import { acquirePollLock } from "@/lib/pollLock";
+import { lockBuilding, PollConflict } from "@/lib/pollLifecycle";
 
 export async function DELETE(
   request: Request,
@@ -26,12 +28,17 @@ export async function DELETE(
     }
 
     // 3. Delete from database (Prisma handles cascading deletes automatically)
-    await db.poll.delete({
+    await db.$transaction(async tx => {
+      await lockBuilding(tx, poll.buildingId);
+      await acquirePollLock(tx, pollId);
+      const current = await tx.poll.findUnique({ where: { id: pollId }, include: { sealedResult: true } });
+      if (!current || current.status !== "draft" || current.sealedResult) throw new PollConflict("Vymazať možno iba nevyhlásený návrh. Vyhlásené hlasovanie a zápisnicu treba zachovať v archíve.");
+    await tx.poll.delete({
       where: { id: pollId }
     });
 
     // 4. Create audit log entry
-    await createAuditLogEntry(
+    await createAuditLogEntryWithTx(tx,
       "POLL_DELETED",
       `admin:${session.email}`,
       {
@@ -40,9 +47,11 @@ export async function DELETE(
         title: poll.title
       }
     );
+    });
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    if (err instanceof PollConflict) return NextResponse.json({ error: err.message }, { status: 409 });
     console.error("Poll delete API error:", err);
     return NextResponse.json({ error: "Nepodarilo sa vymazať hlasovanie." }, { status: 500 });
   }

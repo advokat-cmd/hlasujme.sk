@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { getAdminSession } from "@/lib/session";
+import { canReadBuilding, getAdminSession } from "@/lib/session";
 import { validateVoteToken } from "@/lib/tokens";
 import { readStoredFile } from "@/lib/storage";
 
 /**
  * Serves a poll supporting document to voters and admins.
  * Persistent server storage is the sole file source.
- * Document IDs are unguessable UUIDs — same access model as the previous
- * public "anyone with the link" Drive sharing.
+ * Access requires an administrator, an owner linked to the poll's building,
+ * or a valid voting token for this poll.
  */
 export async function GET(
   request: Request,
@@ -30,14 +30,10 @@ export async function GET(
     const plainToken = url.searchParams.get("token");
     const [session, voter] = await Promise.all([
       getAdminSession(),
-      plainToken ? validateVoteToken(plainToken) : Promise.resolve(null),
+      plainToken ? validateVoteToken(plainToken, { allowBeforeStart: true }) : Promise.resolve(null),
     ]);
-    let authorized = voter?.poll.id === document.pollId;
-    if (session?.role === "admin" || session?.role === "superadmin") authorized = true;
-    if (!authorized && session?.unitId) {
-      const unit = await db.unit.findUnique({ where: { id: session.unitId }, select: { buildingId: true } });
-      authorized = unit?.buildingId === document.poll.buildingId;
-    }
+    const authorized = voter?.poll.id === document.pollId
+      || await canReadBuilding(session, document.poll.buildingId);
     if (!authorized) {
       return NextResponse.json({ error: "Na stiahnutie dokumentu nemáte oprávnenie." }, { status: 403 });
     }

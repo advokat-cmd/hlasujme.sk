@@ -10,6 +10,7 @@ import { Ic } from "@/components/ui/Icons";
 import { Pill } from "@/components/ui/Pill";
 
 import { getAdminSession } from "@/lib/session";
+import { archiveSummary } from "@/lib/archivePresentation";
 
 export const revalidate = 0;
 
@@ -43,14 +44,8 @@ export default async function ArchivePollPage() {
         <div style={{ display: "flex", flexDirection: "column" }}>
           {archivedPolls.length > 0 ? (
             archivedPolls.map((a, i) => {
-              const resultText = a.sealedResult 
-                ? JSON.parse(a.sealedResult.resultJson).status || "closed"
-                : "closed";
-              const isApproved = resultText === "schválené" || resultText === "Schválené";
-              
-              const turnoutText = a.sealedResult
-                ? JSON.parse(a.sealedResult.resultJson).turnout || "—"
-                : "—";
+              const summary = archiveSummary(a.sealedResult);
+              const turnoutText = summary.turnoutText;
 
               return (
                 <div
@@ -78,13 +73,13 @@ export default async function ArchivePollPage() {
                       </div>
                     </Link>
                     <div style={{ fontSize: "12px", color: "var(--ink-soft)", marginTop: 2 }}>
-                      Trvanie: {a.startAt.toLocaleDateString("sk-SK")} – {a.endAt.toLocaleDateString("sk-SK")} · Vyhlásil: {a.declarer} · Účasť: {turnoutText}
+                      Trvanie: {a.startAt.toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" })} – {a.endAt.toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" })} · Vyhlásil: {a.declarer} · Účasť: {turnoutText}
                     </div>
                   </div>
                   
                   <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                    <Pill tone={isApproved ? "success" : "danger"} size="sm">
-                      {isApproved ? "schválené" : "neschválené"}
+                    <Pill tone={summary.tone} size="sm">
+                      {summary.label}
                     </Pill>
                     
                     <a href={`/api/sealed/${a.id}/pdf`} style={{ textDecoration: "none" }}>

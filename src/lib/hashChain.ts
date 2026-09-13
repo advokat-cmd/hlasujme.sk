@@ -7,6 +7,16 @@ export interface AuditPayload {
   [key: string]: unknown;
 }
 
+interface AuditEntry {
+  id: string;
+  action: string;
+  actor: string;
+  payload: string;
+  prevHash: string;
+  entryHash: string;
+  createdAt: Date;
+}
+
 // Arbitrary application-wide lock key for serializing audit chain appends
 const HLASUJME_LOCK_NAMESPACE = 121342447;
 const AUDIT_CHAIN_LOCK_KEY = 1;
@@ -49,11 +59,15 @@ export async function verifyAuditChain(): Promise<boolean> {
     orderBy: { sequence: "asc" }
   });
 
+  return verifyAuditEntries(logs);
+}
+
+export function verifyAuditEntries(logs: AuditEntry[]): boolean {
   if (logs.length === 0) return true;
 
   let expectedPrevHash = "0000000000000000000000000000000000000000000000000000000000000000";
 
-  for (const log of logs) {
+  for (const [index, log] of logs.entries()) {
     if (log.prevHash !== expectedPrevHash) {
       console.error(`Audit log chain broken at log ID: ${log.id}. Expected prevHash: ${expectedPrevHash}, got: ${log.prevHash}`);
       return false;
@@ -63,8 +77,11 @@ export async function verifyAuditChain(): Promise<boolean> {
     const calculatedHash = crypto.createHash("sha256").update(hashInput).digest("hex");
 
     if (log.entryHash !== calculatedHash) {
-      // Allow genesis seeded entry bypass if it was seeded with fixed date in seed script
-      if (log.action === "GENESIS" && log.entryHash === "f4e0c4b22c7a10be14c5c24e6de8a846b7a2d33454790bdde566ee26871536b3") {
+      // Old seeds used a placeholder hash. Only their exact first system entry
+      // is compatible; arbitrary actors or changed payloads must never bypass verification.
+      if (index === 0 && log.action === "GENESIS" && log.actor === "system"
+        && log.payload === JSON.stringify({ message: "Database initialized and seeded." })
+        && log.entryHash === "f4e0c4b22c7a10be14c5c24e6de8a846b7a2d33454790bdde566ee26871536b3") {
         expectedPrevHash = log.entryHash;
         continue;
       }

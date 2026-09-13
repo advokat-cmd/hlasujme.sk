@@ -5,6 +5,7 @@ import {
   validateOptionalEmail,
   validateLoginInput,
   validateNewPassword,
+  validatePasswordChangeInput,
   validateOwners,
   validatePollInput,
 } from "../src/lib/security/input";
@@ -65,6 +66,29 @@ test("internal shares are positive and total one", () => {
 test("password policy requires twelve characters", () => {
   assert.throws(() => validateNewPassword("short"), /12/);
   assert.equal(validateNewPassword("dlhe-bezpecne-heslo"), "dlhe-bezpecne-heslo");
+});
+
+test("the same existing owner cannot be submitted twice to overwrite shares or account data", () => {
+  const owner = { id: "owner-1", first: "A", last: "B", share: 0.5 };
+  assert.throws(() => validateOwners([owner, { ...owner, first: "Different" }], "internal"), /iba raz/i);
+  assert.equal(validateOwners([owner, { ...owner, id: "owner-2" }], "internal").length, 2);
+});
+
+test("a newly accepted password can also pass login validation", () => {
+  const boundary = "a".repeat(4096);
+  assert.equal(validateNewPassword(boundary), boundary);
+  assert.equal(validateLoginInput({ email: "owner@example.com", password: boundary }).password, boundary);
+  assert.throws(() => validateNewPassword("a".repeat(4097)), /4096/);
+});
+
+test("password changes reject malformed values before password verification", () => {
+  for (const input of [null, [], {}, { oldPassword: {}, newPassword: "long-new-password" }, { oldPassword: "a".repeat(4097), newPassword: "long-new-password" }]) {
+    assert.throws(() => validatePasswordChangeInput(input));
+  }
+  assert.deepEqual(validatePasswordChangeInput({ oldPassword: " old-password ", newPassword: " new-long-password " }), {
+    oldPassword: "old-password",
+    newPassword: "new-long-password",
+  });
 });
 
 test("temporary passwords are unique and have sufficient entropy", () => {

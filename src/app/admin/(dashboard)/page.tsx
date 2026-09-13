@@ -11,7 +11,10 @@ import { Pill } from "@/components/ui/Pill";
 import { Stat } from "@/components/ui/Stat";
 import { Progress } from "@/components/ui/Progress";
 import { Ic } from "@/components/ui/Icons";
-import { getAdminSession } from "@/lib/session";
+import { getAdminSession, getOwnerBuildingId } from "@/lib/session";
+import { archiveSummary } from "@/lib/archivePresentation";
+import { pollStatusLabel } from "@/lib/pollPresentation";
+import { OwnerDashboard } from "@/components/admin/OwnerDashboard";
 
 export const revalidate = 0; // Disable server caching for real-time dashboard data
 
@@ -21,14 +24,19 @@ export default async function AdminDashboard() {
     redirect("/admin/login");
   }
   // 1. Fetch building details (default to first seeded building)
-  const building = await db.building.findFirst();
+  const ownerBuildingId = session.role === "vlastnik" ? await getOwnerBuildingId(session) : null;
+  const building = session.role === "vlastnik"
+    ? ownerBuildingId ? await db.building.findUnique({ where: { id: ownerBuildingId } }) : null
+    : await db.building.findFirst();
   if (!building) {
     return (
       <div style={{ padding: 40 }}>
-        <h2>Chyba: V databáze nie je nastavený žiadny bytový dom. Spustite seed skript.</h2>
+        <h2>K vášmu účtu nie je priradený bytový dom. Kontaktujte správcu.</h2>
       </div>
     );
   }
+
+  if (session.role === "vlastnik") return <OwnerDashboard building={building} />;
 
   // 2. Fetch basic counts
   const totalEligible = await db.unit.count({ where: { status: "active", buildingId: building.id } });
@@ -57,7 +65,7 @@ export default async function AdminDashboard() {
     include: { owners: true }
   });
 
-  const missingEmailUnits = activeUnits.filter(u => !u.email);
+  const missingEmailUnits = activeUnits.filter(u => !u.email?.trim() && (u.coMode !== "internal" || !u.owners.some(owner => owner.email?.trim())));
   const alerts: any[] = [];
   const activePollsData: any[] = [];
   const disputedUnitsList: any[] = [];
@@ -140,7 +148,7 @@ export default async function AdminDashboard() {
       });
     }
 
-    const formattedEnd = poll.endAt.toLocaleString("sk-SK", { 
+    const formattedEnd = poll.endAt.toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
       day: "numeric", 
       month: "numeric", 
       year: "numeric", 
@@ -170,7 +178,7 @@ export default async function AdminDashboard() {
 
   // Fetch all active and draft polls for overview list
   const activeAndDraftPolls = await db.poll.findMany({
-    where: { buildingId: building.id, status: { in: [PollStatus.active, PollStatus.draft] } },
+    where: { buildingId: building.id, status: { in: [PollStatus.active, PollStatus.draft, PollStatus.closing] } },
     orderBy: { createdAt: "desc" },
     include: { questions: true }
   });
@@ -207,7 +215,7 @@ export default async function AdminDashboard() {
     alerts.push({
       icon: "mail",
       tone: "danger",
-      text: `Byt č. ${u.no} — vlastník nemá zadanú e-mailovú adresu, pozvánka nebola doručená.`,
+      text: `Byt č. ${u.no} — chýba e-mailová adresa na odoslanie pozvánky.`,
       cta: "Doplniť",
       href: `/admin/register?editUnit=${u.id}`
     });
@@ -223,198 +231,6 @@ export default async function AdminDashboard() {
     });
   });
 
-  if (session.role === "vlastnik") {
-    return (
-      <div className="admin-page-container">
-        <PageHead eyebrow={building.name} title="Klientská zóna vlastníka" />
-
-        {/* Stats Grid */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginBottom: 28 }}>
-          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--primary-bg)", color: "var(--primary)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Ic name="vote" size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Celkovo hlasovaní</div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink)", marginTop: 2 }}>{totalPollsCount}</div>
-            </div>
-          </Card>
-          
-          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 10, background: "rgba(46, 125, 91, 0.12)", color: "var(--agree)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Ic name="checkCircle" size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Prebiehajúce</div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--agree)", marginTop: 2 }}>{activePollsCount}</div>
-            </div>
-          </Card>
-
-          <Card hover pad={16} style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <div style={{ width: 42, height: 42, borderRadius: 10, background: "var(--paper-2)", color: "var(--ink-soft)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-              <Ic name="lock" size={20} />
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: "var(--ink-soft)", fontWeight: 500 }}>Ukončené</div>
-              <div style={{ fontSize: 22, fontWeight: 700, fontFamily: "var(--serif)", color: "var(--ink-soft)", marginTop: 2 }}>{closedPollsCount}</div>
-            </div>
-          </Card>
-        </div>
-
-        {activePollsData.length > 0 ? (
-          activePollsData.map(({ poll, votedUnits, turnout, questionsTallies, formattedEnd }) => (
-            <div key={poll.id} style={{ display: "grid", gridTemplateColumns: "1fr", gap: 20, marginBottom: 28 }}>
-              <Card pad={0}>
-                <div style={{ display: "flex", flexWrap: "wrap" }}>
-                  <div style={{ flex: "1 1 350px", padding: "26px 28px", borderRight: "1px solid var(--line)" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                      <Pill tone="primary" size="sm" icon="vote">Prebieha hlasovanie</Pill>
-                    </div>
-                    <h2 style={{ fontFamily: "var(--serif)", fontSize: 21, fontWeight: 600, margin: "0 0 8px" }}>
-                      {poll.title}
-                    </h2>
-                    <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0 0 16px" }}>
-                      {poll.reason}
-                    </p>
-
-                    <div style={{ fontSize: "12px", color: "var(--ink-soft)", margin: "14px 0" }}>
-                      <strong>Koniec hlasovania:</strong> {formattedEnd}
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 7 }}>
-                      <span style={{ fontSize: 13, fontWeight: 600 }}>Účasť vlastníkov</span>
-                      <span style={{ fontSize: 13, color: "var(--ink-soft)", fontVariantNumeric: "tabular-nums" }}>
-                        {votedUnits} / {totalEligible} jednotiek
-                      </span>
-                      <span style={{ marginLeft: "auto", fontFamily: "var(--serif)", fontSize: 20, fontWeight: 600, whiteSpace: "nowrap" }}>
-                        {turnout} %
-                      </span>
-                    </div>
-                    <Progress value={votedUnits} total={totalEligible} />
-
-                    <div style={{ marginTop: 16, fontSize: "12.5px", color: "var(--ink-soft)", background: "var(--paper-2)", padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)" }}>
-                      ℹ️ <strong>Ako hlasovať?</strong> Odkaz na elektronické hlasovanie Vám bol zaslaný na Váš e-mail. Ak ste ho nedostali, kontaktujte správcu domu.
-                    </div>
-                  </div>
-
-                  <div style={{ flex: "1 1 260px", padding: "26px 28px", background: "var(--paper-2)" }}>
-                    <div style={{ fontFamily: "var(--serif)", fontSize: 17, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
-                      Stav prebiehajúcich otázok
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                      {questionsTallies.map((q: any) => {
-                        const toneMap = {
-                          approved: "success",
-                          rejected: "danger",
-                          short: "accent"
-                        };
-                        const labelMap = {
-                          approved: "Schválené",
-                          rejected: "Neschválené",
-                          short: "Zatiaľ nedosiahnutá väčšina"
-                        };
-                        const iconMap = {
-                          approved: "checkCircle",
-                          rejected: "xCircle",
-                          short: "clock"
-                        };
-                        const currentStatus = q.status as "approved" | "rejected" | "short";
-
-                        return (
-                          <div key={q.no}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink-faint)" }}>{q.no}.</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                                {q.title}
-                              </span>
-                              <Pill tone={toneMap[currentStatus] as any} size="sm" icon={iconMap[currentStatus]}>
-                                {labelMap[currentStatus]}
-                              </Pill>
-                            </div>
-                            <Progress
-                              height={7}
-                              total={q.total}
-                              threshold={q.need}
-                              segments={[
-                                { value: q.agree, color: "var(--agree)" },
-                                { value: q.disagree, color: "var(--disagree)" },
-                              ]}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          ))
-        ) : (
-          <Card style={{ padding: "45px 30px", textAlign: "center", marginBottom: 28 }}>
-            <div style={{ width: 50, height: 50, borderRadius: 25, background: "var(--paper-2)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 15px" }}>
-              <Ic name="vote" size={24} style={{ color: "var(--ink-soft)" }} />
-            </div>
-            <h3 style={{ fontFamily: "var(--serif)", fontSize: 19, margin: "0 0 6px" }}>Aktuálne neprebieha žiadne hlasovanie</h3>
-            <p style={{ fontSize: 13, color: "var(--ink-soft)", margin: "0" }}>Všetky predchádzajúce hlasovania a zápisnice nájdete nižšie v archíve.</p>
-          </Card>
-        )}
-
-        <Card>
-          <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 600, color: "var(--ink)", marginBottom: 16 }}>
-            Archív a výsledky hlasovaní
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            {archivedPolls.length > 0 ? (
-              archivedPolls.map((a, i) => {
-                return (
-                  <div
-                    key={a.id}
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "10px 18px",
-                      padding: "14px 18px",
-                      borderBottom: i < archivedPolls.length - 1 ? "1px solid var(--line)" : "none",
-                    }}
-                  >
-                    <div style={{ flex: 1, minWidth: 240 }}>
-                      <div style={{ fontSize: "14.5px", fontWeight: 600, color: "var(--ink)" }}>{a.title}</div>
-                      <div style={{ fontSize: 12, color: "var(--ink-soft)", marginTop: 2 }}>
-                        Ukončené: {new Date(a.endAt).toLocaleDateString("sk-SK")}
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      {a.sealedResult ? (
-                        <a
-                          href={`/api/sealed/${a.id}/pdf`}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ textDecoration: "none" }}
-                        >
-                          <Btn kind="secondary" size="sm" icon="download">
-                            Stiahnuť zápisnicu (PDF)
-                          </Btn>
-                        </a>
-                      ) : (
-                        <span style={{ fontSize: 12.5, color: "var(--ink-soft)" }}>Zápisnica sa generuje...</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div style={{ fontSize: 13, color: "var(--ink-soft)", textAlign: "center", padding: "20px 0" }}>
-                Žiadne ukončené hlasovania.
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="admin-page-container">
@@ -566,12 +382,12 @@ export default async function AdminDashboard() {
                       </span>
                     </Link>
                     <div style={{ fontSize: "11.5px", color: "var(--ink-soft)", marginTop: 2 }}>
-                      Trvanie: {new Date(a.startAt).toLocaleDateString("sk-SK")} – {new Date(a.endAt).toLocaleDateString("sk-SK")} · Otázok: {a.questions.length}
+                      Trvanie: {new Date(a.startAt).toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" })} – {new Date(a.endAt).toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" })} · Otázok: {a.questions.length}
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <Pill tone={isActive ? "success" : "neutral"} size="sm">
-                      {isActive ? "prebieha" : "rozpracované"}
+                      {pollStatusLabel(a.status, a.startAt.toISOString(), a.endAt.toISOString())}
                     </Pill>
                     <Link href={`/admin/poll/${a.id}`} style={{ textDecoration: "none" }}>
                       <Btn kind="secondary" size="sm" icon="eye">Detail</Btn>
@@ -690,15 +506,8 @@ export default async function AdminDashboard() {
           <div style={{ display: "flex", flexDirection: "column" }}>
             {archivedPolls.length > 0 ? (
               archivedPolls.map((a, i) => {
-                const resultText = a.sealedResult 
-                  ? JSON.parse(a.sealedResult.resultJson).status || "closed"
-                  : "closed";
-                const isApproved = resultText === "schválené" || resultText === "Schválené";
-                
-                // Parse seed turnout mock data
-                const turnoutText = a.sealedResult
-                  ? JSON.parse(a.sealedResult.resultJson).turnout || "—"
-                  : "—";
+                const summary = archiveSummary(a.sealedResult);
+                const turnoutText = summary.turnoutText;
 
                 return (
                   <div
@@ -725,12 +534,12 @@ export default async function AdminDashboard() {
                         {a.title}
                       </div>
                       <div style={{ fontSize: "11.5px", color: "var(--ink-soft)" }}>
-                        Ukončené {a.endAt.toLocaleDateString("sk-SK")} · účasť {turnoutText}
+                        Ukončené {a.endAt.toLocaleDateString("sk-SK", { timeZone: "Europe/Bratislava" })} · účasť {turnoutText}
                       </div>
                     </div>
                     
-                    <Pill tone={isApproved ? "success" : "danger"} size="sm">
-                      {isApproved ? "schválené" : "neschválené"}
+                    <Pill tone={summary.tone} size="sm">
+                      {summary.label}
                     </Pill>
                     
                     <a href={`/api/sealed/${a.id}/pdf`} style={{ textDecoration: "none" }}>
@@ -765,7 +574,7 @@ export default async function AdminDashboard() {
                   payload = JSON.parse(log.payload);
                 } catch (e) {}
 
-                const dateStr = new Date(log.createdAt).toLocaleString("sk-SK", {
+                const dateStr = new Date(log.createdAt).toLocaleString("sk-SK", { timeZone: "Europe/Bratislava",
                   day: "2-digit",
                   month: "2-digit",
                   year: "numeric",

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/session";
+import { canReadBuilding, getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 
 export async function GET(
@@ -20,6 +20,9 @@ export async function GET(
 
     if (!poll) {
       return NextResponse.json({ error: "Hlasovanie nebolo nájdené." }, { status: 404 });
+    }
+    if (!(await canReadBuilding(session, poll.buildingId))) {
+      return NextResponse.json({ error: "Nedostatočné oprávnenia." }, { status: 403 });
     }
 
     const files = poll.documents.map(document => ({

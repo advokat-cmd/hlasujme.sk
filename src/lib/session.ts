@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
 import { db } from "./db";
+import { hasBuildingAccess, isAccountRole, type AccountRole } from "./security/accounts";
 
 const SESSION_COOKIE_NAME = "hlasovanie_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
@@ -23,7 +24,7 @@ export interface AdminSession {
   email: string;
   name: string;
   unitId: string | null;
-  role: string;
+  role: AccountRole;
 }
 
 export async function getAdminSession(): Promise<AdminSession | null> {
@@ -35,7 +36,7 @@ export async function getAdminSession(): Promise<AdminSession | null> {
     where: { tokenHash: hashSessionToken(token) },
     include: { admin: true },
   });
-  if (!session || session.revokedAt || session.expiresAt <= now) {
+  if (!session || session.revokedAt || session.expiresAt <= now || !isAccountRole(session.admin.role)) {
     if (session && !session.revokedAt) {
       await db.adminSession.update({ where: { id: session.id }, data: { revokedAt: now } });
     }
@@ -50,7 +51,22 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   };
 }
 
+export async function getOwnerBuildingId(session: AdminSession | null): Promise<string | null> {
+  if (session?.role !== "vlastnik" || !session.unitId) return null;
+  const unit = await db.unit.findUnique({
+    where: { id: session.unitId },
+    select: { buildingId: true },
+  });
+  return unit?.buildingId ?? null;
+}
+
+export async function canReadBuilding(session: AdminSession | null, buildingId: string): Promise<boolean> {
+  if (!session) return false;
+  return hasBuildingAccess(session.role, buildingId, await getOwnerBuildingId(session));
+}
+
 export async function setAdminSession(session: AdminSession): Promise<void> {
+  if (!isAccountRole(session.role)) throw new Error("Neplatná rola účtu.");
   const token = randomBytes(32).toString("base64url");
   await db.adminSession.create({
     data: {
