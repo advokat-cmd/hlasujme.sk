@@ -57,7 +57,7 @@ V jednom dome môže byť naraz iba jedno vyhlásené alebo práve uzatvárané 
 
 ## 5. Pozvánky, opätovné odoslanie a pripomienky
 
-Aktivácia vytvorí osobné odkazy a vyhodnotí pokusy o odoslanie. Ak časť e-mailov zlyhá, hlasovanie už môže byť aktívne; administrátor skontroluje výsledok rozoslania a príslušnému registrovanému príjemcovi pozvánku odošle znova. Opakované stlačenie aktivácie už aktívneho hlasovania nespustí druhé hromadné rozoslanie.
+Aktivácia vytvorí osobné odkazy a vyhodnotí pokusy o odoslanie. E-maily sa odosielajú v dávkach po najviac päť správ; ďalšia dávka začne najskôr päť sekúnd po predchádzajúcej. Pri 14 pozvánkach teda odídu dávky 5 + 5 + 4, približne v čase 0, 5 a 10 sekúnd. Toto obmedzenie zdieľajú aj ďalšie odosielania aplikácie, takže pri súbehu môže odoslanie trvať dlhšie. Po dočasnom obmedzení rýchlosti službou Resend aplikácia chvíľu počká a vykoná obmedzený počet opakovaní s ochranou proti duplicitám. Ak časť e-mailov zlyhá, hlasovanie už môže byť aktívne; administrátor skontroluje výsledok rozoslania a príslušnému registrovanému príjemcovi pozvánku odošle znova. Opakované stlačenie aktivácie už aktívneho hlasovania nespustí druhé hromadné rozoslanie.
 
 Ručné opätovné odoslanie je dostupné počas aktívneho hlasovania pred koncom termínu. Pri internom režime sa identifikuje aj konkrétny spoluvlastník, aby sa nezamenili osoby so spoločným e-mailom. Vlastník má používať najnovšiu pozvánku.
 

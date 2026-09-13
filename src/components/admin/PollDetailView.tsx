@@ -1033,8 +1033,8 @@ export const PollDetailView: React.FC<PollDetailViewProps> = ({
           >
             <Ic name="shield" size={18} style={{ color: "var(--primary)", flexShrink: 0, marginTop: 1 }} />
             <div>
-              E-maily sa odosielajú jednotlivo cez <strong>Resend / Postmark API</strong>. Žiadny príjemca
-              nevidí e-mailovú adresu iného vlastníka. Odkazy sú kryptograficky zabezpečené magic-linky.
+              E-maily sa odosielajú v dávkach po najviac <strong>5 správ</strong>. Ďalšia dávka začne najskôr
+              po <strong>5 sekundách</strong>. Každý príjemca dostane samostatný e-mail a nevidí adresy ostatných vlastníkov.
             </div>
           </div>
           

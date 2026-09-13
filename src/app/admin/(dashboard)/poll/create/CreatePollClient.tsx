@@ -719,7 +719,8 @@ export default function CreatePollClient() {
                 >
                   <Ic name="send" size={16} style={{ flexShrink: 0, marginTop: 1 }} />
                   Po nahratí príloh sa vygenerujú unikátne osobné odkazy pre jednotky (a pre jednotlivých spoluvlastníkov
-                  pri internom režime) a automaticky sa odošlú e-mailové pozvánky.
+                  pri internom režime) a automaticky sa odošlú e-mailové pozvánky v dávkach po najviac 5 správ.
+                  Ďalšia dávka začne najskôr po 5 sekundách. Počkajte na výsledok odosielania.
                 </div>
               </div>
 

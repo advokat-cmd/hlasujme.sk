@@ -1,9 +1,94 @@
+import { randomUUID } from "node:crypto";
 import { db } from "./db";
 
 interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
+}
+
+const EMAIL_BATCH_SIZE = 5;
+const EMAIL_BATCH_INTERVAL_MS = 5000;
+const RESEND_MAX_ATTEMPTS = 4;
+const RESEND_MAX_WAIT_MS = 30_000;
+
+interface EmailSchedule {
+  tail: Promise<void>;
+  batchStartedAt: number;
+  batchCount: number;
+  blockedUntil: number;
+}
+
+// Route bundles and development reloads share the limiter in this Node process.
+const globalForEmail = globalThis as typeof globalThis & {
+  hlasujmeEmailSchedule?: EmailSchedule;
+};
+
+function getEmailSchedule(): EmailSchedule {
+  return globalForEmail.hlasujmeEmailSchedule ??= {
+    tail: Promise.resolve(), batchStartedAt: 0, batchCount: 0, blockedUntil: 0,
+  };
+}
+
+class ResendCooldownError extends Error {
+  constructor() {
+    super("Resend cooldown exceeds the request wait budget");
+    this.name = "ResendCooldownError";
+  }
+}
+
+async function pacedEmailFetch(url: string, options: RequestInit): Promise<Response> {
+  const schedule = getEmailSchedule();
+  const previous = schedule.tail;
+  let release!: () => void;
+  schedule.tail = new Promise<void>(resolve => { release = resolve; });
+  try {
+    await previous;
+    // Recheck after waking: another response may have extended the cooldown.
+    for (;;) {
+      const nextBatchAt = schedule.batchCount >= EMAIL_BATCH_SIZE
+        ? schedule.batchStartedAt + EMAIL_BATCH_INTERVAL_MS : 0;
+      const waitMs = Math.max(nextBatchAt, schedule.blockedUntil) - Date.now();
+      if (waitMs > RESEND_MAX_WAIT_MS) throw new ResendCooldownError();
+      if (waitMs <= 0) break;
+      await new Promise<void>(resolve => setTimeout(resolve, waitMs));
+    }
+    // Start each batch from the actual clock, so delayed timers cannot collapse batches.
+    const now = Date.now();
+    if (!schedule.batchCount || now >= schedule.batchStartedAt + EMAIL_BATCH_INTERVAL_MS) {
+      schedule.batchStartedAt = now;
+      schedule.batchCount = 0;
+    }
+    schedule.batchCount++;
+    return fetch(url, { ...options, signal: AbortSignal.timeout(15_000) });
+  } finally {
+    // Only serialize request starts; a slow or rejected fetch cannot block this queue.
+    release();
+  }
+}
+
+function retryAfterMs(value: string | null, attempt: number): number {
+  if (value?.trim()) {
+    const seconds = Number(value);
+    if (Number.isFinite(seconds) && seconds >= 0) return Math.ceil(seconds * 1000);
+    const date = Date.parse(value);
+    if (Number.isFinite(date)) return Math.max(0, date - Date.now());
+  }
+  return 1000 * 2 ** attempt;
+}
+
+function safeErrorCode(value: unknown): string {
+  return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value) ? value : "unknown_error";
+}
+
+async function providerErrorCode(response: Response, provider: "resend" | "postmark"): Promise<string> {
+  try {
+    const body = await response.json();
+    if (provider === "resend") return safeErrorCode(body?.name);
+    return Number.isInteger(body?.ErrorCode) ? `postmark_${body.ErrorCode}` : "unknown_error";
+  } catch {
+    return "invalid_error_response";
+  }
 }
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<boolean> {
@@ -14,7 +99,7 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
   // Bypass sending in development if API key is a dummy or missing
   if (!apiKey || apiKey.startsWith("re_mock_") || apiKey.startsWith("pm_mock_")) {
     if (process.env.NODE_ENV === "production") {
-      console.error("[Email Service] Production email is not configured; message was not sent.");
+      console.error("[Email Service] Message was not sent", { to, reason: "production_email_not_configured" });
       return false;
     }
     console.log(`[Email Service] MOCK mode — email to ${to} not sent (no API key configured).`);
@@ -23,11 +108,12 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
 
   try {
     if (provider.toLowerCase() === "resend") {
-      const response = await fetch("https://api.resend.com/emails", {
+      const options: RequestInit = {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`
+          Authorization: `Bearer ${apiKey}`,
+          "Idempotency-Key": randomUUID(),
         },
         body: JSON.stringify({
           from,
@@ -35,16 +121,26 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
           subject,
           html
         })
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Resend API error: ${response.status} - ${errorText}`);
+      };
+      for (let attempt = 0; attempt < RESEND_MAX_ATTEMPTS; attempt++) {
+        const response = await pacedEmailFetch("https://api.resend.com/emails", options);
+        if (response.ok) return true;
+        const reason = await providerErrorCode(response, "resend");
+        if (response.status === 429 && reason === "rate_limit_exceeded") {
+          const waitMs = retryAfterMs(response.headers.get("retry-after"), attempt);
+          const schedule = getEmailSchedule();
+          schedule.blockedUntil = Math.max(schedule.blockedUntil, Date.now() + waitMs);
+          if (attempt + 1 < RESEND_MAX_ATTEMPTS && waitMs <= RESEND_MAX_WAIT_MS) {
+            console.warn("[Email Service] Resend request will retry", { to, reason, attempt: attempt + 1, waitMs });
+            continue;
+          }
+        }
+        console.error("[Email Service] Resend request failed", { to, status: response.status, reason, attempts: attempt + 1 });
         return false;
       }
-      return true;
+      return false;
     } else if (provider.toLowerCase() === "postmark") {
-      const response = await fetch("https://api.postmarkapp.com/email", {
+      const response = await pacedEmailFetch("https://api.postmarkapp.com/email", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -60,17 +156,17 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       });
 
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`Postmark API error: ${response.status} - ${errorText}`);
+        const reason = await providerErrorCode(response, "postmark");
+        console.error("[Email Service] Postmark request failed", { to, status: response.status, reason });
         return false;
       }
       return true;
     } else {
-      console.warn(`Unsupported email provider: ${provider}`);
+      console.warn("[Email Service] Unsupported email provider", { to, reason: "unsupported_provider" });
       return false;
     }
   } catch (err) {
-    console.error("Failed to send email:", err);
+    console.error("[Email Service] Email request failed", { to, reason: err instanceof Error ? safeErrorCode(err.name) : "unknown_error" });
     return false;
   }
 }
