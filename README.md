@@ -12,6 +12,10 @@ npm run dev
 
 Pred odovzdaním zmien spustite `npm run check` a `npm run build`.
 
+## Bezpečnostné aktualizácie závislostí
+
+Next.js a jeho ESLint konfigurácia sú pripnuté na opravnú verziu 16.3.5. Závislosť `deepmerge-ts` v `@prisma/config` má úzko obmedzený override na 8.0.0 kvôli [GHSA-ggr8-5vv4-36mx](https://github.com/RebeccaStevens/deepmerge-ts/security/advisories/GHSA-ggr8-5vv4-36mx). Prisma aj klient zostávajú na 6.19.3; nenahrádzajte ich automaticky staršou verziou navrhovanou cez `npm audit fix --force`. Konfigurácia projektu používa bežné objekty; kompatibilita loadera, validácia schémy, testy aj zostavenie boli overené. Pri budúcej aktualizácii Prisma znovu posúďte potrebu override.
+
 ## Integračné testy
 
 `npm run test:integration` objaví všetky štyri súbory v `tests/integration/` a spúšťa ich postupne (`--test-concurrency=1`). Súbežný beh celých súborov nie je bezpečný: test životného cyklu používa prvý dom a test súbežnosti dočasne zamyká tabuľky. Jednotlivé testy si riadenú súbežnosť vytvárajú samy.
@@ -30,10 +34,11 @@ ALLOW_DESTRUCTIVE_TEST_DB="1"
 TRUST_PROXY="1"
 ```
 
-Server aj testy musia dostať rovnakú konfiguráciu databázy a úložiska. V prvom termináli spustite lokálny vývojový server s testovacími e-mailami:
+Server aj testy musia dostať rovnakú konfiguráciu databázy a úložiska. V izolovanej kópii skopírujte testovacie nastavenia do ignorovaného `.env.local`, ktorý Next.js načíta automaticky. V prvom termináli PowerShell spustite lokálny vývojový server s testovacími e-mailami:
 
-```bash
-node --env-file=.env.integration node_modules/next/dist/bin/next dev --webpack -p 3217
+```powershell
+Copy-Item -LiteralPath .env.integration -Destination .env.local
+npm run dev -- --webpack -p 3217
 ```
 
 V druhom termináli spustite všetky integračné testy:
