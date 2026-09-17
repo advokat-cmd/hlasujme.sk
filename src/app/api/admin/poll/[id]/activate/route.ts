@@ -5,7 +5,7 @@ import { generateVoteTokens } from "@/lib/tokens";
 import { sendEmail, getInvitationEmail } from "@/lib/email";
 import { createAuditLogEntryWithTx, createAuditLogEntry } from "@/lib/hashChain";
 import { acquirePollLock } from "@/lib/pollLock";
-import { lockBuilding, assertNoRunningPoll, PollConflict } from "@/lib/pollLifecycle";
+import { lockBuilding, PollConflict } from "@/lib/pollLifecycle";
 
 export async function POST(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
@@ -23,7 +23,6 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       if (poll.status !== "draft") throw new PollConflict("Vyhlásiť možno iba návrh hlasovania.");
       if (poll.endAt <= new Date()) throw new PollConflict("Termín hlasovania už uplynul. Pripravte návrh s novým termínom.");
       if (!poll.questions.length) throw new PollConflict("Hlasovanie musí obsahovať otázky.");
-      await assertNoRunningPoll(tx, poll.buildingId);
       const activeUnits = await tx.unit.count({ where: { buildingId: poll.buildingId, status: "active" } });
       if (!activeUnits) throw new PollConflict("Dom nemá žiadne aktívne hlasovacie jednotky.");
       const tokens = await generateVoteTokens(pollId, tx);

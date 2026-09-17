@@ -13,7 +13,7 @@ export async function assertNoRunningPoll(tx: Prisma.TransactionClient, building
     where: { buildingId, status: { in: ["active", "closing"] } },
     select: { id: true },
   });
-  if (running) throw new PollConflict("Pre tento dom už prebieha hlasovanie. Najprv ho uzavrite; dovtedy nemožno meniť zloženie vlastníkov ani hlasovacie podiely.");
+  if (running) throw new PollConflict("Pre tento dom prebiehajú hlasovania. Najprv ich všetky uzavrite; dovtedy nemožno meniť zloženie vlastníkov ani hlasovacie podiely.");
 }
 
 type ElectorateOwner = { id?: string; first: string; last: string; share: number; role: string };

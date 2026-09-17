@@ -15,6 +15,7 @@ import { getAdminSession, getOwnerBuildingId } from "@/lib/session";
 import { archiveSummary } from "@/lib/archivePresentation";
 import { pollStatusLabel } from "@/lib/pollPresentation";
 import { OwnerDashboard } from "@/components/admin/OwnerDashboard";
+import { buildPollConflictAlerts } from "@/lib/dashboardAlerts";
 
 export const revalidate = 0; // Disable server caching for real-time dashboard data
 
@@ -66,10 +67,7 @@ export default async function AdminDashboard() {
   });
 
   const missingEmailUnits = activeUnits.filter(u => !u.email?.trim() && (u.coMode !== "internal" || !u.owners.some(owner => owner.email?.trim())));
-  const alerts: any[] = [];
   const activePollsData: any[] = [];
-  const disputedUnitsList: any[] = [];
-  const partialOwnersList: any[] = [];
 
   for (const poll of activePolls) {
     // Batched: all effective votes and tallies for this poll in 4 queries
@@ -93,9 +91,6 @@ export default async function AdminDashboard() {
       const isDisputed = poll.questions.some(q => perQuestion?.get(q.no)?.disputed);
       if (isDisputed) {
         disputedInThisPoll.push(u);
-        if (!disputedUnitsList.some(du => du.id === u.id)) {
-          disputedUnitsList.push(u);
-        }
       }
     }
 
@@ -120,10 +115,6 @@ export default async function AdminDashboard() {
         const hasNotVotedSome = group.units.some(u => !votedUnitIds.has(u.id));
         if (hasVotedSome && hasNotVotedSome) {
           partialInThisPoll.push({
-            name: group.name,
-            units: group.units
-          });
-          partialOwnersList.push({
             name: group.name,
             units: group.units
           });
@@ -201,15 +192,12 @@ export default async function AdminDashboard() {
   const formattedEnd = activePollData ? activePollData.formattedEnd : "";
 
   // 6. Generate Alerts
-  disputedUnitsList.forEach(u => {
-    alerts.push({
-      icon: "alert",
-      tone: "accent",
-      text: `Byt č. ${u.no} — spoluvlastníci hlasovali rozdielne a žiadny nemá väčšinu podielov. Hlas je sporný.`,
-      cta: "Riešiť",
-      href: `/admin/poll/${activePoll?.id}?tab=units`
-    });
-  });
+  const alerts: any[] = buildPollConflictAlerts(activePollsData.map(data => ({
+    pollId: data.poll.id,
+    pollTitle: data.poll.title,
+    disputedUnits: data.disputedUnitsList,
+    partialOwners: data.partialOwnersList,
+  })));
 
   missingEmailUnits.forEach(u => {
     alerts.push({
@@ -220,17 +208,6 @@ export default async function AdminDashboard() {
       href: `/admin/register?editUnit=${u.id}`
     });
   });
-
-  partialOwnersList.forEach(p => {
-    alerts.push({
-      icon: "user",
-      tone: "primary",
-      text: `${p.name} vlastní viac jednotiek (${p.units.map((u: any) => "č. " + u.no).join(", ")}) a zatiaľ nehlasoval za všetky.`,
-      cta: "Zobraziť",
-      href: `/admin/poll/${activePoll?.id}?tab=units`
-    });
-  });
-
 
   return (
     <div className="admin-page-container">

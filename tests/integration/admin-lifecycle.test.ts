@@ -23,7 +23,7 @@ test("draft publication, register locking and immutable closure through HTTP", {
   const units: string[] = [];
   const ownedBuildings: string[] = [];
   const sealedFiles: string[] = [];
-  let activePollId = "";
+  let activePollIds: string[] = [];
   const docIds: string[] = [];
 
   async function accountCookie(role: string, unitId?: string) {
@@ -90,16 +90,23 @@ test("draft publication, register locking and immutable closure through HTTP", {
       assert.equal((await jsonRequest(`/api/admin/poll/${polls[0]}/files`, ownerCookie, undefined, "GET")).status, 200);
       assert.equal((await jsonRequest(`/api/admin/poll/${polls[0]}/files`, foreignCookie, undefined, "GET")).status, 403);
     });
-    await t.test("concurrent publication permits only one running poll per building", async () => {
+    await t.test("concurrent publication permits multiple running polls with isolated tokens", async () => {
       const responses = await Promise.all(polls.map(pollId => jsonRequest(`/api/admin/poll/${pollId}/activate`, adminCookie)));
-      assert.deepEqual(responses.map(response => response.status).sort(), [200, 409]);
-      activePollId = polls[responses.findIndex(response => response.status === 200)];
-      const state = await db.poll.findUniqueOrThrow({ where: { id: activePollId } });
-      assert.equal(state.status, "active");
-      assert.ok(await db.voteToken.count({ where: { pollId: activePollId, unitId: unit.id } }) > 0);
-      assert.equal(await db.poll.count({ where: { buildingId: building.id, status: "active" } }), 1);
+      assert.deepEqual(responses.map(response => response.status), [200, 200]);
+      activePollIds = [...polls];
+      const states = await db.poll.findMany({ where: { id: { in: activePollIds } }, orderBy: { id: "asc" } });
+      assert.equal(states.length, 2);
+      assert.ok(states.every(state => state.status === "active"));
+      const tokens = await db.voteToken.findMany({
+        where: { pollId: { in: activePollIds }, unitId: unit.id },
+        select: { pollId: true, tokenHash: true },
+      });
+      const tokenHashesByPoll = new Map(activePollIds.map(pollId => [pollId, tokens.filter(token => token.pollId === pollId).map(token => token.tokenHash)]));
+      assert.ok(activePollIds.every(pollId => (tokenHashesByPoll.get(pollId)?.length ?? 0) > 0));
+      assert.equal(new Set(tokens.map(token => token.tokenHash)).size, tokens.length, "Each poll must receive its own voting tokens");
+      assert.equal(await db.poll.count({ where: { buildingId: building.id, status: "active" } }), 2);
     });
-    await t.test("active poll freezes electorate fields but permits email corrections", async () => {
+    await t.test("running polls freeze electorate fields but permit email corrections", async () => {
       const structural = await jsonRequest(`/api/admin/unit/${unit.id}`, adminCookie, { ...unitPayload, no: unit.no + "-changed" }, "PUT");
       assert.equal(structural.status, 409, await structural.text());
       const email = `corrected-${suffix}@example.test`;
@@ -107,36 +114,47 @@ test("draft publication, register locking and immutable closure through HTTP", {
       const allowed = await jsonRequest(`/api/admin/unit/${unit.id}`, adminCookie, unitPayload, "PUT");
       assert.equal(allowed.status, 200, await allowed.text());
       assert.equal((await db.unit.findUniqueOrThrow({ where: { id: unit.id } })).email, email);
-      const before = fileCount(activePollId);
-      assert.equal((await upload(activePollId, adminCookie)).status, 409);
-      assert.equal(fileCount(activePollId), before, "Rejected uploads must not leave orphan files");
+      const before = fileCount(activePollIds[0]);
+      assert.equal((await upload(activePollIds[0], adminCookie)).status, 409);
+      assert.equal(fileCount(activePollIds[0]), before, "Rejected uploads must not leave orphan files");
     });
-    await t.test("concurrent close seals once and produces matching PDF and snapshot hashes", async () => {
-      await db.vote.create({ data: { pollId: activePollId, unitId: unit.id, questionNo: 1, answer: "agree" } });
-      const responses = await Promise.all([jsonRequest(`/api/admin/poll/${activePollId}/close`, adminCookie), jsonRequest(`/api/admin/poll/${activePollId}/close`, adminCookie)]);
+    await t.test("closing one poll keeps structural register changes locked while another runs", async () => {
+      const firstPollId = activePollIds[0];
+      await db.vote.create({ data: { pollId: firstPollId, unitId: unit.id, questionNo: 1, answer: "agree" } });
+      const responses = await Promise.all([jsonRequest(`/api/admin/poll/${firstPollId}/close`, adminCookie), jsonRequest(`/api/admin/poll/${firstPollId}/close`, adminCookie)]);
       const payloads = await Promise.all(responses.map(response => response.json()));
       assert.deepEqual(responses.map(response => response.status), [200, 200], JSON.stringify(payloads));
       assert.equal(payloads[0].sha256, payloads[1].sha256);
       assert.equal(payloads[0].resultSha256, payloads[1].resultSha256);
-      assert.equal(await db.sealedResult.count({ where: { pollId: activePollId } }), 1);
-      const seal = await db.sealedResult.findUniqueOrThrow({ where: { pollId: activePollId } });
+      assert.equal(await db.sealedResult.count({ where: { pollId: firstPollId } }), 1);
+      const seal = await db.sealedResult.findUniqueOrThrow({ where: { pollId: firstPollId } });
       sealedFiles.push(resolveStoragePath(seal.pdfPath));
       assert.equal(sha256Hex(readFileSync(sealedFiles[0])), seal.sha256);
       assert.equal(sha256Hex(seal.resultJson), seal.resultSha256);
-      assert.equal((await db.poll.findUniqueOrThrow({ where: { id: activePollId } })).status, "closed");
+      assert.equal((await db.poll.findUniqueOrThrow({ where: { id: firstPollId } })).status, "closed");
+      assert.equal((await db.poll.findUniqueOrThrow({ where: { id: activePollIds[1] } })).status, "active");
+      const stillLocked = await jsonRequest(`/api/admin/unit/${unit.id}`, adminCookie, { ...unitPayload, no: unit.no + "-changed" }, "PUT");
+      assert.equal(stillLocked.status, 409, await stillLocked.text());
     });
-    await t.test("closed results and documents stay fixed after the register changes", async () => {
-      const before = await db.sealedResult.findUniqueOrThrow({ where: { pollId: activePollId } });
+    await t.test("closing the final poll unlocks register changes without altering sealed results", async () => {
+      const finalPollId = activePollIds[1];
+      await db.vote.create({ data: { pollId: finalPollId, unitId: unit.id, questionNo: 1, answer: "agree" } });
+      const closed = await jsonRequest(`/api/admin/poll/${finalPollId}/close`, adminCookie);
+      assert.equal(closed.status, 200, await closed.text());
+      const finalSeal = await db.sealedResult.findUniqueOrThrow({ where: { pollId: finalPollId } });
+      sealedFiles.push(resolveStoragePath(finalSeal.pdfPath));
+
+      const before = await db.sealedResult.findUniqueOrThrow({ where: { pollId: activePollIds[0] } });
       const change = await jsonRequest(`/api/admin/unit/${unit.id}`, adminCookie, { ...unitPayload, owners: [{ ...unitPayload.owners[0], first: "Changed" }] }, "PUT");
       assert.equal(change.status, 200, await change.text());
-      const after = await db.sealedResult.findUniqueOrThrow({ where: { pollId: activePollId } });
+      const after = await db.sealedResult.findUniqueOrThrow({ where: { pollId: activePollIds[0] } });
       assert.equal(after.resultJson, before.resultJson);
       assert.equal(after.sha256, before.sha256);
       const snapshot = parseSealedSnapshot(after.resultJson, after.resultSha256);
       assert.equal(snapshot?.units.find(candidate => candidate.id === unit.id)?.owners[0].name, "Original Owner");
-      const beforeFiles = fileCount(activePollId);
-      assert.equal((await upload(activePollId, adminCookie)).status, 409);
-      assert.equal(fileCount(activePollId), beforeFiles);
+      const beforeFiles = fileCount(activePollIds[0]);
+      assert.equal((await upload(activePollIds[0], adminCookie)).status, 409);
+      assert.equal(fileCount(activePollIds[0]), beforeFiles);
     });
   } finally {
     await db.admin.deleteMany({ where: { id: { in: accounts } } });

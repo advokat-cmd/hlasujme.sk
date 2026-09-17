@@ -51,7 +51,7 @@ Sprievodca **Vytvoriť hlasovanie** má štyri kroky:
 
 Ak nahratie prílohy zlyhá, hlasovanie zostane návrhom a pozvánky sa neposielajú. V detaile, v časti **Podklady a dokumenty**, možno dokument priradiť k otázke alebo ho pridať ako všeobecný podklad. Po kontrole sa návrh spustí tlačidlom **Spustiť a odoslať pozvánky**. Vyhlásené podklady už nemožno meniť. Vymazanie je dostupné iba pre návrh.
 
-V jednom dome môže byť naraz iba jedno vyhlásené alebo práve uzatvárané hlasovanie. To zahŕňa aj už vyhlásené hlasovanie s budúcim začiatkom. Pred spustením ďalšieho treba predchádzajúce uzavrieť. Počas tohto obdobia sa blokujú zmeny zloženia vlastníkov a ich hlasovacích podielov; doplnenie kontaktov je odlišná operácia.
+V jednom dome môže byť naraz vyhlásených aj viac hlasovaní vrátane hlasovaní s budúcim začiatkom. Každé má vlastné osobné odkazy, hlasy, termíny a výsledky. Kým je aspoň jedno hlasovanie aktívne alebo sa práve uzatvára, blokujú sa zmeny zloženia vlastníkov a ich hlasovacích podielov; register sa odomkne až po uzavretí všetkých takých hlasovaní. Doplnenie kontaktov je odlišná operácia.
 
 **Chýbajúci e-mail neznižuje počet oprávnených hlasov.** Aktívna jednotka zostáva vo výpočte aj vtedy, keď jej nemožno poslať pozvánku. Ak nemá doručovací kontakt žiadna jednotka, aktivácia sa odmietne. Chýbajúci kontakt preto treba riešiť pred spustením, nie ho považovať za vyradenie jednotky.
 
