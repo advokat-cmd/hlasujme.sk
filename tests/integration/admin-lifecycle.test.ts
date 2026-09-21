@@ -126,7 +126,19 @@ test("draft publication, register locking and immutable closure through HTTP", {
       assert.deepEqual(responses.map(response => response.status), [200, 200], JSON.stringify(payloads));
       assert.equal(payloads[0].sha256, payloads[1].sha256);
       assert.equal(payloads[0].resultSha256, payloads[1].resultSha256);
+      assert.deepEqual(payloads.map(payload => payload.notificationStatus).sort(), ["not-needed", "sent"]);
+      assert.equal(payloads.filter(payload => payload.notificationRecipient === "milan@ficek.sk").length, 1);
+      assert.equal(payloads.filter(payload => payload.notificationRecipient === null).length, 1);
       assert.equal(await db.sealedResult.count({ where: { pollId: firstPollId } }), 1);
+      assert.equal(await db.protocolEmailLog.count({ where: { pollId: firstPollId } }), 0, "Closure must not automatically email owners");
+      const notificationLogs = await db.auditLog.findMany({
+        where: { action: { in: ["POLL_CLOSED_ADMIN_NOTIFICATION_QUEUED", "POLL_CLOSED_ADMIN_NOTIFICATION_SENT", "POLL_CLOSED_ADMIN_NOTIFICATION_FAILED"] } },
+      });
+      const notificationActions = notificationLogs
+        .filter(log => JSON.parse(log.payload).pollId === firstPollId)
+        .map(log => log.action)
+        .sort();
+      assert.deepEqual(notificationActions, ["POLL_CLOSED_ADMIN_NOTIFICATION_QUEUED", "POLL_CLOSED_ADMIN_NOTIFICATION_SENT"]);
       const seal = await db.sealedResult.findUniqueOrThrow({ where: { pollId: firstPollId } });
       sealedFiles.push(resolveStoragePath(seal.pdfPath));
       assert.equal(sha256Hex(readFileSync(sealedFiles[0])), seal.sha256);

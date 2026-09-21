@@ -57,6 +57,9 @@ export const CloseModal: React.FC<CloseModalProps> = ({
       if (!res.ok) {
         setError(data.error || "Nepodarilo sa uzavrieť hlasovanie.");
       } else {
+        if (data.notificationStatus === "failed") {
+          window.alert("Hlasovanie bolo bezpečne uzavreté, ale informačný e-mail na milan@ficek.sk sa nepodarilo odoslať. Stav hlasovania nájdete v aplikácii.");
+        }
         onSuccess();
       }
     } catch (err) {
@@ -189,7 +192,7 @@ export const CloseModal: React.FC<CloseModalProps> = ({
                   marginTop: 6,
                 }}
               >
-                Po potvrdení sa hlasovanie uzamkne a finálna PDF zápisnica sa uloží na serveri. Výsledky vlastníkom odošlete tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Zapečatené výsledky sa už neprepočítavajú podľa neskorších zmien registra.
+                Po potvrdení sa hlasovanie uzamkne a finálna PDF zápisnica sa uloží na serveri. Vlastníkom sa automaticky neodošle zápisnica ani výsledky. Na milan@ficek.sk príde stav hlasovania s odkazom do administrácie. Výsledky môžete vlastníkom neskôr odoslať ručne tlačidlom „Odoslať vlastníkom“ v záložke Zápisnica. Zapečatené výsledky sa už neprepočítavajú podľa neskorších zmien registra.
               </div>
             </div>
           )}

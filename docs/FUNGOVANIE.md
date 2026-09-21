@@ -97,11 +97,13 @@ Administrátor otvorí **Uzavrieť hlasovanie**, skontroluje upozornenia a súhr
 
 Server zosúladí uzavretie so súbežnými hlasmi, vytvorí konečný záznam údajov v JSON a PDF zápisnicu. Nový archív zachováva otázky, jednotky, vlastníkov, váhy a účinné hlasy v čase uzavretia. Neskoršia úprava registra jeho výsledky neprepočíta. JSON aj PDF majú vlastný kontrolný odtlačok SHA-256; čítanie overuje príslušnú integritu. Auditný záznam reťazí kontrolné odtlačky udalostí.
 
+Po úspešnom uzavretí príde jeden informačný e-mail na **milan@ficek.sk**. Obsahuje stav a výsledky jednotlivých otázok a odkaz na detail hlasovania v administrácii, ktorý vyžaduje prihlásenie. Neobsahuje PDF ani verejný odkaz na zápisnicu. Súbežné alebo opakované potvrdenie toho istého uzavretia nevytvorí ďalší informačný e-mail. Ak odoslanie zlyhá, hlasovanie zostane bezpečne uzavreté a administrácia zobrazí upozornenie.
+
 PDF obsahuje aj mennú prílohu jednotiek a ich výsledných hlasov. Pri internom režime príloha uvádza výsledný hlas jednotky, nie samostatné odpovede každého spoluvlastníka. **Hlasovanie nie je anonymné.** Prístup oprávneného vlastníka k zápisnici znamená aj prístup k tejto prílohe. Hash a serverový čas nie sú kvalifikovaným elektronickým podpisom ani nezávislou kvalifikovanou časovou pečiatkou.
 
 ## 9. Ručné odoslanie zápisnice
 
-Uzavretie výsledky automaticky nerozosiela. Administrátor v záložke **Zápisnica** použije **Odoslať vlastníkom**. E-mail obsahuje podpísaný odkaz na PDF, platný 30 dní od vytvorenia, ktorý nevyžaduje prihlásenie. Jeho držiteľ môže počas platnosti zápisnicu otvoriť, preto je citlivý rovnako ako iný prístupový odkaz.
+Uzavretie vlastníkom automaticky neodošle zápisnicu ani výsledky. Administrátor ich môže odoslať až samostatným ručným úkonom v záložke **Zápisnica** cez **Odoslať vlastníkom**. E-mail obsahuje podpísaný odkaz na PDF, platný 30 dní od vytvorenia, ktorý nevyžaduje prihlásenie. Jeho držiteľ môže počas platnosti zápisnicu otvoriť, preto je citlivý rovnako ako iný prístupový odkaz.
 
 Adresy sa vyberajú z aktuálneho registra aktívnych jednotiek, pri internom režime z kontaktov spoluvlastníkov s prípadným náhradným e-mailom jednotky. Duplicitné adresy sa zjednotia a adresy už evidované ako úspešne odoslané sa pri bežnom opakovaní preskočia. Nejde o historicky zmrazený doručovací zoznam. História eviduje úspešné odoslania; nevypovedá o prečítaní správy.
 
