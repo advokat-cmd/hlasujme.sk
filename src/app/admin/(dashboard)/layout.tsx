@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getAdminSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { AdminSidebar } from "@/components/admin/AdminSidebar";
+import "../../globals.css";
 
 export default async function AdminLayout({
   children,
@@ -12,7 +13,7 @@ export default async function AdminLayout({
   // 1. Verify admin is logged in
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    redirect("/");
   }
 
   // 2. Fetch active poll (to pass link to sidebar)

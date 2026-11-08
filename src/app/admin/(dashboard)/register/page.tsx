@@ -12,7 +12,7 @@ export default async function AdminRegisterPage() {
   // 1. Verify admin session
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    redirect("/");
   }
   if (session.role === "vlastnik") {
     redirect("/admin");

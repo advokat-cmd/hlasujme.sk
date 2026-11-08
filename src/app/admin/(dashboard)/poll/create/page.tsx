@@ -4,7 +4,7 @@ import CreatePollClient from "./CreatePollClient";
 
 export default async function CreatePollPage() {
   const session = await getAdminSession();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/");
   if (session.role !== "admin" && session.role !== "superadmin") redirect("/admin");
   return <CreatePollClient />;
 }

@@ -9,7 +9,7 @@ export const revalidate = 0; // Disable server cache
 export default async function AdminSettingsPage() {
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    redirect("/");
   }
   if (session.role === "vlastnik") {
     redirect("/admin");

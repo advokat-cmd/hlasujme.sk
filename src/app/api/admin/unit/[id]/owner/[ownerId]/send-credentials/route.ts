@@ -85,7 +85,7 @@ export async function POST(
 
     // 4. Send Email using sendEmail
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
-    const loginLink = `${baseUrl}/admin/login`;
+    const loginLink = `${baseUrl}/`;
 
     const emailContent = await getCredentialsEmail({
       ownerName: owner.name,

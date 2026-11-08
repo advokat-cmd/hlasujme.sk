@@ -1,10 +1,15 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import "./login.css";
 import { connection } from "next/server";
 
 export const metadata: Metadata = {
-  title: "Elektronické hlasovanie vlastníkov",
-  description: "Elektronické hlasovanie vlastníkov bytov a nebytových priestorov podľa zákona č. 182/1993 Z. z.",
+  title: "Prihlásenie",
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+  },
+  referrer: "no-referrer",
 };
 
 export default async function RootLayout({

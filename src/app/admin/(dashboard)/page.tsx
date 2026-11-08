@@ -22,7 +22,7 @@ export const revalidate = 0; // Disable server caching for real-time dashboard d
 export default async function AdminDashboard() {
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    redirect("/");
   }
   // 1. Fetch building details (default to first seeded building)
   const ownerBuildingId = session.role === "vlastnik" ? await getOwnerBuildingId(session) : null;

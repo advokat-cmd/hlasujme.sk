@@ -71,7 +71,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId, 
         setOldPassword("");
         setNewPassword("");
         setNewPasswordConfirm("");
-        router.push("/admin/login");
+        router.push("/");
         router.refresh();
       }
     } catch (err) {
@@ -97,7 +97,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ user, activePollId, 
     try {
       const res = await fetch("/api/auth/logout", { method: "POST" });
       if (res.ok) {
-        router.push("/admin/login");
+        router.push("/");
         router.refresh();
       }
     } catch (err) {

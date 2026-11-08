@@ -19,7 +19,7 @@ export default async function AdminPollDetailPage({
   // 1. Verify admin session
   const session = await getAdminSession();
   if (!session) {
-    redirect("/admin/login");
+    redirect("/");
   }
 
   const { id: pollId } = await params;

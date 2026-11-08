@@ -218,7 +218,7 @@ const generateEmailPreviewHtml = (key: string, subject: string, bodyHtml: string
     "{protocolLink}": "#",
     "{unitNo}": "12",
     "{dateFormatted}": "29. 6. 2026 o 15:45",
-    "{loginLink}": "https://hlasujme.sk/admin/login",
+    "{loginLink}": "https://hlasujme.sk/",
     "{loginEmail}": "jan.novak@email.sk",
     "{rawPassword}": "AbCdEf123",
     "{answersList}": `

@@ -16,7 +16,7 @@ export const revalidate = 0;
 
 export default async function ArchivePollPage() {
   const session = await getAdminSession();
-  if (!session) redirect("/admin/login");
+  if (!session) redirect("/");
   if (session.role === "vlastnik") redirect("/admin");
 
   const building = await db.building.findFirst();
